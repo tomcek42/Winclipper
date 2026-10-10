@@ -568,9 +568,9 @@ bool MainWindow::AddNotificationIcon(HWND hWnd, HINSTANCE hInstance)
 	nid.hWnd = hWnd;
 	nid.uFlags = NIF_ICON | NIF_MESSAGE;
 	nid.uCallbackMessage = WMAPP_NOTIFYCALLBACK;
-	nid.uID =
-		// Load the icon for high DPI.
-		LoadIconMetric(hInstance, MAKEINTRESOURCE(IDI_WINCLIPPER), LIM_SMALL, &nid.hIcon);
+	nid.uID = UID_NOTIFYICON;
+	// Load the icon for high DPI.
+	LoadIconMetric(hInstance, MAKEINTRESOURCE(IDI_WINCLIPPER), LIM_SMALL, &nid.hIcon);
 	// Show the notification.
 	Shell_NotifyIcon(NIM_ADD, &nid);
 
@@ -582,6 +582,7 @@ bool MainWindow::AddNotificationIcon(HWND hWnd, HINSTANCE hInstance)
 bool MainWindow::DeleteNotificationIcon()
 {
 	NOTIFYICONDATA nid = { sizeof(nid) };
+	nid.hWnd = windowHandle;
 	nid.uID = UID_NOTIFYICON;
 	return Shell_NotifyIcon(NIM_DELETE, &nid);
 }
