@@ -296,12 +296,52 @@ static bool CopyClipboardDib(const BYTE * data, SIZE_T available, bool forceOpaq
 	return true;
 }
 
+// Password managers and other apps mark sensitive content with these formats
+// so that clipboard history tools skip it. Must be called with the clipboard open.
+// See: https://learn.microsoft.com/windows/win32/dataxchg/clipboard-formats#cloud-clipboard-and-clipboard-history-formats
+static bool ClipboardContentExcluded()
+{
+	static const UINT excludeFormat = RegisterClipboardFormatW(L"ExcludeClipboardContentFromMonitorProcessing");
+	static const UINT viewerIgnoreFormat = RegisterClipboardFormatW(L"Clipboard Viewer Ignore");
+	static const UINT historyFormat = RegisterClipboardFormatW(L"CanIncludeInClipboardHistory");
+
+	if ((excludeFormat != 0 && IsClipboardFormatAvailable(excludeFormat))
+		|| (viewerIgnoreFormat != 0 && IsClipboardFormatAvailable(viewerIgnoreFormat)))
+	{
+		return true;
+	}
+
+	bool excluded = false;
+	if (historyFormat != 0 && IsClipboardFormatAvailable(historyFormat))
+	{
+		HANDLE hData = GetClipboardData(historyFormat);
+		// Fail closed: an unreadable marker still means the owner set it.
+		excluded = true;
+		if (hData != nullptr && GlobalSize(hData) >= sizeof(DWORD))
+		{
+			const DWORD * value = static_cast<const DWORD *>(GlobalLock(hData));
+			if (value != nullptr)
+			{
+				excluded = *value == 0;
+				GlobalUnlock(hData);
+			}
+		}
+	}
+	return excluded;
+}
+
 bool ClipsManager::AddToClips(HWND hWnd)
 {
     if (!OpenClipboard(hWnd))
     {
         return false;
     }
+
+	if (ClipboardContentExcluded())
+	{
+		CloseClipboard();
+		return true;
+	}
 
 	std::shared_ptr<Clip> clip = std::make_shared<Clip>();
 
