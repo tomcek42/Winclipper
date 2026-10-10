@@ -430,57 +430,65 @@ void UserSettings::Deserialize(std::vector<std::wstring> srData)
 
     for (std::pair<int, std::wstring> pair : store)
     {
-        switch (pair.first)
+        // settings.dat is untrusted: a non-numeric or out-of-range value must
+        // not abort startup. Skip the entry and keep the default.
+        try
         {
-        case MAX_DISPLAY:
-            SetMaxDisplayClips(stoi(pair.second));
-            break;
-        case MAX_SAVED:
-            SetMaxSavedClips(stoi(pair.second));
-            break;
-        case MENU_CHARS:
-            SetMenuDisplayChars(stoi(pair.second));
-            break;
-        case CMENU_HOTKEY:
-            SetClipsMenuHotkey(stous(pair.second));
-            break;
-        case SAVE_TO_DISK:
+            switch (pair.first)
             {
-                bool result = pair.second.compare(std::to_wstring(true)) == 0;
-                SetSaveToDisk(result);
-            }
+            case MAX_DISPLAY:
+                SetMaxDisplayClips(stoi(pair.second));
+                break;
+            case MAX_SAVED:
+                SetMaxSavedClips(stoi(pair.second));
+                break;
+            case MENU_CHARS:
+                SetMenuDisplayChars(stoi(pair.second));
+                break;
+            case CMENU_HOTKEY:
+                SetClipsMenuHotkey(stous(pair.second));
+                break;
+            case SAVE_TO_DISK:
+                {
+                    bool result = pair.second.compare(std::to_wstring(true)) == 0;
+                    SetSaveToDisk(result);
+                }
+                break;
+            case SLCT_2ND_CLIP:
+                {
+                    bool result = pair.second.compare(std::to_wstring(true)) == 0;
+                    SetSelect2ndClip(result);
+                }
             break;
-        case SLCT_2ND_CLIP:
-            {
-                bool result = pair.second.compare(std::to_wstring(true)) == 0;
-                SetSelect2ndClip(result);
+            case SHOW_PREVIEW:
+                {
+                    bool result = pair.second.compare(std::to_wstring(true)) == 0;
+                    SetShowPreview(result);
+                }
+                break;
+    		case SAVE_IMAGES:
+    			{
+    				bool result = pair.second.compare(std::to_wstring(true)) == 0;
+    				SetSaveImages(result);
+    			}
+    		break;
+    		case MAX_CACHE_MBYTES:
+    			{
+    				SetMaxCacheMegabytes(stoi(pair.second));
+    			}
+    			break;
+    		case PASTE_ON_CLICK:
+    			{
+    				bool result = pair.second.compare(std::to_wstring(true)) == 0;
+    				SetPasteOnClick(result);
+    			}
+    		break;
+            default:
+                break;
             }
-        break;
-        case SHOW_PREVIEW:
-            {
-                bool result = pair.second.compare(std::to_wstring(true)) == 0;
-                SetShowPreview(result);
-            }
-            break;
-		case SAVE_IMAGES:
-			{
-				bool result = pair.second.compare(std::to_wstring(true)) == 0;
-				SetSaveImages(result);
-			}
-		break;
-		case MAX_CACHE_MBYTES:
-			{
-				SetMaxCacheMegabytes(stoi(pair.second));
-			}
-			break;
-		case PASTE_ON_CLICK:
-			{
-				bool result = pair.second.compare(std::to_wstring(true)) == 0;
-				SetPasteOnClick(result);
-			}
-		break;
-        default:
-            break;
+        }
+        catch (const std::exception&)
+        {
         }
     }
 }
