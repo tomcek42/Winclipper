@@ -71,10 +71,22 @@ bool File::Delete(const wchar_t * name) noexcept
 
 void File::DeleteDir(std::wstring dirName)
 {
+	// pFrom must be double-null terminated; c_str() supplies only one.
+	// SHFileOperation does not accept a trailing separator.
+	while (!dirName.empty() && dirName.back() == DIR_SEP)
+	{
+		dirName.pop_back();
+	}
+	if (dirName.empty())
+	{
+		return;
+	}
+	dirName.push_back(L'\0');
+
 	SHFILEOPSTRUCT shFileOp = {
 		nullptr,
 		FO_DELETE,
-		(dirName += L"\0").c_str(),
+		dirName.c_str(),
 		nullptr,
 		FOF_NOCONFIRMATION |
 		FOF_NOERRORUI |
