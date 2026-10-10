@@ -259,3 +259,4 @@ ModelManifest.xml
 .gsd/.compat.json
 .gsd/STATE.md
 .gsd/CODEBASE.md
+.gsd/phases/*/*-CONTINUE.md

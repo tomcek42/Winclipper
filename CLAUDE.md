@@ -5,21 +5,24 @@ Ziel dieses Forks: Sicherheitsprüfung und Härtung. Befunde und Backlog: `.gsd/
 
 ## Bauen
 
-Das Projekt zielt auf **PlatformToolset v141 + Windows SDK 8.1** — beides ist hier nicht
-installiert. Retargeting per Kommandozeile genügt, keine Codeänderung nötig:
+Fork ohne geplante Upstream-Merges. Beide Projekte (`Winclipper`, `Controls`) sind fest auf
+**PlatformToolset v145 + Windows SDK 10.0.26100.0** umgestellt und linken die CRT **statisch**
+(`/MT`, Debug `/MTd`) — die EXE braucht keine VC++-Redistributable. `RuntimeLibrary` muss in
+beiden Projekten übereinstimmen, sonst scheitert der Linker.
 
 ```
-msbuild Winclipper/Winclipper.sln -p:Configuration=Release -p:Platform=x64 \
-  -p:PlatformToolset=v145 -p:WindowsTargetPlatformVersion=10.0.26100.0
+msbuild Winclipper/Winclipper.sln -t:Winclipper -p:Configuration=Release -p:Platform=x64
 ```
 
-Die `.vcxproj` nicht dauerhaft auf `v145` umstellen, solange Upstream-Merges geplant sind.
+`msbuild` liegt nicht im PATH: `C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\MSBuild\Current\Bin\MSBuild.exe`.
 
 `Winclipper.vcxproj` erzwingt das NuGet-Paket **WiX 3.11** (`packages\WiX.3.11.0\build\wix.props`)
 und bricht ohne es ab — auch wenn nur die EXE gebaut wird. Das Paket liegt entpackt unter
 `Winclipper/packages/` und ist per `.gitignore` ausgeschlossen; nach einem frischen Klon muss es
 wiederhergestellt werden. Die Setup-Projekte (`Setup-x64`, `Setup-x86`) brauchen zusätzlich die
-installierten WiX-Toolset-Build-Tools und lassen sich sonst gar nicht bauen.
+installierten WiX-Toolset-Build-Tools und lassen sich sonst gar nicht bauen. Sie binden noch die
+VC141-CRT-Merge-Module ein; seit `/MT` braucht die EXE sie nicht mehr, ob `SSUP_merge_*.msm`
+(Updater des Originalautors) sie braucht, ist ungeprüft.
 
 Installierte Toolsets prüfen:
 `"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -all -format json`
@@ -27,8 +30,7 @@ Installierte Toolsets prüfen:
 ## Fallstricke im Bestand
 
 - Upstream hatte in `Winclipper.vcxproj` an vier Stellen einen **hartkodierten absoluten
-  Include-Pfad** des Originalautors. Ersetzt durch `$(SolutionDir)..\Controls`. Bei Merges von
-  upstream kommt der Pfad zurück — dann erneut ersetzen.
+  Include-Pfad** des Originalautors. Ersetzt durch `$(SolutionDir)..\Controls`.
 - Der `Controls`-Unterprojekt-Header wird nur über diesen Include-Pfad gefunden; `Controls.h`
   liegt nicht im Winclipper-Verzeichnis.
 
@@ -47,5 +49,5 @@ Clip-Inhalte sind derzeit nur base64-kodiert, also im Klartext. Neue Persistenz 
 
 ## Arbeitsweise in diesem Repo
 
-Nichts pushen ohne ausdrückliche Freigabe. Fixes einzeln committen, damit sie gegenüber
-upstream nachvollziehbar bleiben.
+Nichts pushen ohne ausdrückliche Freigabe. Fixes einzeln committen, damit jeder
+Sicherheitsfix für sich prüfbar und per `git revert` rückgängig zu machen ist.
