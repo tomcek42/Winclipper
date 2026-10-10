@@ -136,7 +136,6 @@ void OnDemandBitmapManager::SetSaveToDisk(bool newSaveToDisk)
 				std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
 				auto path = File::JoinPath(GetCacheDir(), converter.from_bytes(pair.first));
 				File::WriteProtected(path, pair.second->Serialize());
-				CreateAndSaveThumbnail(pair.first, pair.second);
 				UpdateUsage(pair.first);
 			}
 		}
@@ -148,14 +147,11 @@ void OnDemandBitmapManager::DeleteAllFromDisk()
 	File::DeleteDir(GetCacheDir());
 }
 
-HBITMAP OnDemandBitmapManager::CreateAndSaveThumbnail(std::string guid, std::shared_ptr<Bitmap> bitmap)
+// Thumbnails are kept in memory only: a file on disk would be an
+// unencrypted copy of the clip image.
+HBITMAP OnDemandBitmapManager::CreateThumbnail(std::shared_ptr<Bitmap> bitmap)
 {
 	HBITMAP retVal = nullptr;
-
-	IWICStream * piFileStream = nullptr;
-	IWICBitmapEncoder * piEncoder = nullptr;
-	IWICMetadataBlockWriter * piBlockWriter = nullptr;
-	IWICMetadataBlockReader * piBlockReader = nullptr;
 
 	const UINT height = GetSystemMetrics(SM_CXMENUCHECK);
 	const UINT width = GetSystemMetrics(SM_CXMENUCHECK);
@@ -192,91 +188,6 @@ HBITMAP OnDemandBitmapManager::CreateAndSaveThumbnail(std::string guid, std::sha
 			WICBitmapInterpolationModeFant);
 	}
 
-	if (SUCCEEDED(hr))
-	{
-		hr = GetWICFactory()->CreateEncoder(GUID_ContainerFormatBmp, nullptr, &piEncoder);
-	}
-
-	if (SUCCEEDED(hr))
-	{
-		hr = GetWICFactory()->CreateStream(&piFileStream);
-	}
-
-	if (SUCCEEDED(hr))
-	{
-		std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-		auto path = File::JoinPath(GetCacheDir(), converter.from_bytes(guid));
-
-		hr = piFileStream->InitializeFromFilename((path + L"-thumb").c_str(), GENERIC_WRITE);
-	}
-
-	if (SUCCEEDED(hr))
-	{
-		hr = piEncoder->Initialize(piFileStream, WICBitmapEncoderNoCache);
-	}
-
-	// We will only ever be working with single frames, so don't worry about others
-	if (SUCCEEDED(hr))
-	{
-		IWICBitmapFrameEncode * piframeEncode = nullptr;
-
-		if (SUCCEEDED(hr))
-		{
-			hr = piEncoder->CreateNewFrame(&piframeEncode, nullptr);
-		}
-
-		if (SUCCEEDED(hr))
-		{
-			hr = piframeEncode->Initialize(nullptr);
-		}
-
-		if (SUCCEEDED(hr))
-		{
-			hr = piframeEncode->SetSize(width, height);
-		}
-
-		if (SUCCEEDED(hr))
-		{
-			WICPixelFormatGUID formatGuid;
-			hr = piScaler->GetPixelFormat(&formatGuid);
-			if (SUCCEEDED(hr))
-			{
-				hr = piframeEncode->SetPixelFormat(&formatGuid);
-			}
-		}
-
-		GUID destFormat = GUID_ContainerFormatBmp;
-
-		if (SUCCEEDED(hr))
-		{
-			hr = piEncoder->GetContainerFormat(&destFormat);
-		}
-
-		piframeEncode->QueryInterface(&piBlockWriter);
-
-		if (piBlockReader != nullptr && piBlockWriter != nullptr)
-		{
-			hr = piBlockWriter->InitializeFromBlockReader(piBlockReader);
-		}
-
-		if (SUCCEEDED(hr))
-		{
-			hr = piframeEncode->WriteSource(piScaler, nullptr);
-		}
-
-		if (SUCCEEDED(hr))
-		{
-			hr = piframeEncode->Commit();
-		}
-
-		SafeRelease(&piframeEncode);
-	}
-
-	if (SUCCEEDED(hr))
-	{
-		piEncoder->Commit();
-	}
-
 	IWICFormatConverter * pConvertedSourceBitmap = nullptr;
 
 	if (SUCCEEDED(hr))
@@ -301,17 +212,13 @@ HBITMAP OnDemandBitmapManager::CreateAndSaveThumbnail(std::string guid, std::sha
 	{
 		UINT bufferSize = width * height * 4;
 		std::vector<BYTE> buffer;
-		buffer.reserve(size_t{ bufferSize });
+		buffer.resize(size_t{ bufferSize });
 		pConvertedSourceBitmap->CopyPixels(nullptr, width * 4, bufferSize, buffer.data());
 
 		retVal = CreateBitmap(width, height, 1, 32, buffer.data());
 	}
 
 	SafeRelease(&pConvertedSourceBitmap);
-	SafeRelease(&piFileStream);
-	SafeRelease(&piEncoder);
-	SafeRelease(&piBlockWriter);
-	SafeRelease(&piBlockReader);
 	SafeRelease(&pBitmap);
 	SafeRelease(&piScaler);
 
@@ -324,18 +231,17 @@ HBITMAP OnDemandBitmapManager::GetThumbnail(std::string guid)
 	std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
 	auto path = File::JoinPath(GetCacheDir(), converter.from_bytes(guid));
 
+	// Older versions saved thumbnails as plaintext BMP files.
 	path += L"-thumb";
 	if (File::Exists(path.c_str()))
 	{
-		retVal = static_cast<HBITMAP>(LoadImageW(nullptr, path.c_str(), IMAGE_BITMAP, 0, 0, LR_DEFAULTSIZE | LR_LOADFROMFILE));
+		File::Delete(path.c_str());
 	}
-	else
+
+	std::shared_ptr<Bitmap> pBitmap = OnDemandBitmapManager::Get(guid).lock();
+	if (pBitmap != nullptr)
 	{
-		std::shared_ptr<Bitmap> pBitmap = OnDemandBitmapManager::Get(guid).lock();
-		if (pBitmap != nullptr)
-		{
-			retVal = CreateAndSaveThumbnail(guid, pBitmap);
-		}
+		retVal = CreateThumbnail(pBitmap);
 	}
 
 	return retVal;

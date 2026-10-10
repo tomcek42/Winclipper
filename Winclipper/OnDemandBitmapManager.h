@@ -22,7 +22,7 @@ public:
 	static void						SetSaveToDisk(bool newSaveToDisk);
 	static void						DeleteAllFromDisk();
 
-	static HBITMAP					CreateAndSaveThumbnail(std::string guid, std::shared_ptr<Bitmap> bitmap);
+	static HBITMAP					CreateThumbnail(std::shared_ptr<Bitmap> bitmap);
 	static HBITMAP					GetThumbnail(std::string guid);
 	static void						RemoveThumbnail(std::string guid, bool async);
 

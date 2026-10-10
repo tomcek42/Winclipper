@@ -111,7 +111,8 @@ void Clip::Deserialize(std::string serializationData)
 							}
 							bitmapHeight = std::stol(units.at(2));
 							bitmapWidth = std::stol(units.at(3));
-							thumbnail = OnDemandBitmapManager::GetThumbnail(bitmapGuid);
+							// The thumbnail is created on first use; doing it here
+							// would decrypt every cached image at startup.
 							break;
 						default:
 							break;
@@ -200,7 +201,7 @@ void Clip::SetDibBitmap(std::shared_ptr<BITMAPINFOHEADER> pBmiHeader, std::vecto
 	auto bitmap = std::make_shared<Bitmap>(pBmiHeader, quads, bits);
 
 	bitmapGuid = OnDemandBitmapManager::Add(bitmap);
-	thumbnail = OnDemandBitmapManager::CreateAndSaveThumbnail(bitmapGuid, bitmap);
+	thumbnail = OnDemandBitmapManager::CreateThumbnail(bitmap);
 	auto weak = OnDemandBitmapManager::Get(bitmapGuid);
 	std::lock_guard<std::mutex> lock(bitmapMutex);
 	pBitmap = weak;
@@ -302,7 +303,15 @@ HBITMAP Clip::GetThumbnail() noexcept
 {
 	if (thumbnail == nullptr)
 	{
-		thumbnail = OnDemandBitmapManager::GetThumbnail(bitmapGuid);
+		try
+		{
+			thumbnail = OnDemandBitmapManager::GetThumbnail(bitmapGuid);
+		}
+		catch (const std::exception&)
+		{
+			// Corrupt or undecryptable cache file; show the entry without a thumbnail.
+			MarkForDelete();
+		}
 	}
 	return thumbnail;
 }
