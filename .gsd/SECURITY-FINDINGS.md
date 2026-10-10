@@ -1,7 +1,7 @@
 # Winclipper — Security-Review & Backlog
 
 Stand: 2026-10-10. Fork `tomcek42/Winclipper`, upstream `Carson-Shook/Winclipper` (keine Merges mehr geplant).
-Status: Persistenzschicht gehärtet, Auto-Updater entfernt (F1, F3–F11 behoben). Offen: F2, ungeprüfte Bereiche unten.
+Status: Persistenzschicht gehärtet, Auto-Updater entfernt (F1, F3–F14 behoben). Alle geplanten Bereiche geprüft. Offen: F2, Tray-Icon (funktional).
 
 | Befund | Status | Commit |
 |---|---|---|
@@ -16,6 +16,9 @@ Status: Persistenzschicht gehärtet, Auto-Updater entfernt (F1, F3–F11 behoben
 | F9 Ungeprüfte DIB-Daten aus der Zwischenablage | behoben | `2191642` |
 | F10 Unbegrenztes Lesen von `CF_UNICODETEXT` | behoben | `2bc2715` |
 | F11 Rechtsklick-Löschen über Menüposition | behoben | `1db2b39` |
+| F12 Stack-Overflow beim Lesen von Registry-Werten | behoben | `08187b1` |
+| F13 Autostart-Pfad ohne Anführungszeichen | behoben | `ffe49b1` |
+| F14 Ausschlussmarkierungen der Zwischenablage ignoriert | behoben | `0370fc7` |
 
 ## Build-Setup (verifiziert)
 
@@ -132,11 +135,37 @@ Prozess gleicher Integritätsstufe an das versteckte Fenster senden. Das liegt i
 kein `hWnd`, und `AddNotificationIcon` belegt `uID` mit dem HRESULT von `LoadIconMetric`, sodass das Entfernen
 des Tray-Icons beim Beenden fehlschlägt.
 
-## Noch nicht geprueft
+### F12 — Stack-Overflow beim Lesen von Registry-Werten (`Winclipper/RegistryUtilities.cpp`) — schwerwiegend
+`AppsUseLightTheme`, `ClipboardHistoryEnabled` und `ClipboardStartupWarningDisabled` übergaben `RegQueryValueExW`
+`cbData = 4096` für ein 4-Byte-`INT32`, ohne den Typ zu prüfen. Ein HKCU-Wert anderen Typs (z. B. `REG_BINARY`
+mit 4 KB) überschrieb den Stack; `ClipboardHistoryEnabled` läuft bei jedem Start. Schreibbar für jeden Prozess
+des Benutzers, also wie die Appdata-Dateien zu behandeln. `ReleaseId` (HKLM) wurde ohne garantierte
+NUL-Terminierung an `stoi` gegeben. Fix: `RegGetValueW` mit `RRF_RT_REG_DWORD`/`RRF_RT_REG_SZ` (prüft Typ, Größe
+und Terminierung). Nebenbei: kein `RegCloseKey` mehr auf ungeöffnete Handles, Schreibschlüssel nur mit
+`KEY_SET_VALUE`.
 
-- Zwischenablage-Erfassung: Ownership
-- `RegistryUtilities.cpp` (Autostart)
+### F13 — Autostart-Pfad ohne Anführungszeichen (`Winclipper/SettingsWindow.cpp`, `WriteRegistryRun`; `Setup-*/Product.wxs`) — mittel
+Der Run-Wert enthielt den EXE-Pfad ohne Anführungszeichen. Windows zerlegt ihn wie eine Kommandozeile;
+bei `C:\Program Files\Winclipper\Winclipper.exe` wird zuerst `C:\Program.exe` versucht. Ausnutzbar nur, wenn
+dort jemand schreiben kann (normal nur Admins), daher mittel. Der Installer schrieb den Wert genauso. Außerdem
+wurde ein fehlgeschlagenes `RegOpenKeyExW` ignoriert und `sizeof(pPath)` (520 Byte) statt der echten Länge
+geschrieben. Fix: Pfad in Anführungszeichen (Code und beide `.wxs`), Rückgabewerte geprüft, minimale
+Zugriffsrechte. Bestehende Run-Werte werden erst beim nächsten Umschalten in den Einstellungen bzw. bei einer
+Neuinstallation korrigiert.
+
+### F14 — Ausschlussmarkierungen der Zwischenablage ignoriert (`Winclipper/ClipsManager.cpp`, `AddToClips`) — schwerwiegend
+Passwortmanager markieren kopierte Geheimnisse mit `ExcludeClipboardContentFromMonitorProcessing`,
+`Clipboard Viewer Ignore` oder `CanIncludeInClipboardHistory = 0`. Winclipper prüfte das nicht und speicherte
+Passwörter dauerhaft in `clips.dat`, im Klartext (F2). Fix: `ClipboardContentExcluded` prüft die drei Formate
+bei geöffneter Zwischenablage und überspringt markierte Inhalte. Ein unlesbarer `CanIncludeInClipboardHistory`-
+Wert gilt als Ausschluss.
+
+Ownership sonst ohne Sicherheitsbefund: `ClipLock` (nicht-atomares `bool`, nur UI-Thread) unterdrückt das
+`WM_CLIPBOARDUPDATE` nach eigenem Setzen. Scheitern alle Versuche in `SetClipboardToClipAtIndex`, bleibt es
+gesetzt und die nächste echte Kopie wird verschluckt (funktional, gering).
 
 ## Nächste Schritte
 
 1. F2 (DPAPI) nach Designentscheidung.
+2. Tray-Icon beim Beenden entfernen (funktional, siehe F11).
+3. Eigener `UpgradeCode` für den Installer (Produktentscheidung, siehe F8).
