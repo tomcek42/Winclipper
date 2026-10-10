@@ -1,5 +1,17 @@
 #include "stdafx.h"
 #include "File.h"
+#include <wincrypt.h>
+#pragma comment(lib, "Crypt32.lib")
+
+// Files written by WriteProtected start with this marker, followed by a
+// DPAPI blob bound to the current user. Files without it are from versions
+// that stored clips in plaintext.
+static const char PROTECTED_MAGIC[] = "WCDPAPI1";
+static const size_t PROTECTED_MAGIC_LEN = sizeof(PROTECTED_MAGIC) - 1;
+
+// Secondary entropy so blobs from other applications of the same user
+// cannot be swapped in. It is not a secret.
+static const char PROTECTED_ENTROPY[] = "Winclipper clip store v1";
 
 // Gets the directory path from a given file path.
 std::wstring File::GetDirName(const std::wstring& fname)
@@ -142,6 +154,66 @@ std::string File::Read(std::wstring filename)
 		return contents.str();
 	}
 	return std::string();
+}
+
+// Encrypts data with DPAPI for the current user and writes it to filename.
+void File::WriteProtected(std::wstring filename, const std::string & data)
+{
+	if (data.size() > MAXDWORD)
+	{
+		throw std::exception("Could not encrypt clips.");
+	}
+
+	DATA_BLOB in = { static_cast<DWORD>(data.size()), reinterpret_cast<BYTE *>(const_cast<char *>(data.data())) };
+	DATA_BLOB entropy = { sizeof(PROTECTED_ENTROPY) - 1, reinterpret_cast<BYTE *>(const_cast<char *>(PROTECTED_ENTROPY)) };
+	DATA_BLOB out = { 0, nullptr };
+
+	if (!CryptProtectData(&in, L"Winclipper", &entropy, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &out))
+	{
+		throw std::exception("Could not encrypt clips.");
+	}
+
+	std::string file(PROTECTED_MAGIC, PROTECTED_MAGIC_LEN);
+	file.append(reinterpret_cast<const char *>(out.pbData), out.cbData);
+	LocalFree(out.pbData);
+
+	Write(filename, file);
+}
+
+// Reads a file written by WriteProtected and returns the decrypted data.
+// A file without the marker is returned as-is with wasPlaintext set, so
+// the caller can rewrite it encrypted. Throws if decryption fails, e.g.
+// because the file was tampered with or belongs to another user.
+std::string File::ReadProtected(std::wstring filename, bool & wasPlaintext)
+{
+	std::string file = Read(filename);
+
+	if (file.compare(0, PROTECTED_MAGIC_LEN, PROTECTED_MAGIC, PROTECTED_MAGIC_LEN) != 0)
+	{
+		wasPlaintext = !file.empty();
+		return file;
+	}
+	wasPlaintext = false;
+
+	const size_t blobSize = file.size() - PROTECTED_MAGIC_LEN;
+	if (blobSize == 0 || blobSize > MAXDWORD)
+	{
+		throw std::exception("Encrypted clip data is corrupt.");
+	}
+
+	DATA_BLOB in = { static_cast<DWORD>(blobSize), reinterpret_cast<BYTE *>(&file[PROTECTED_MAGIC_LEN]) };
+	DATA_BLOB entropy = { sizeof(PROTECTED_ENTROPY) - 1, reinterpret_cast<BYTE *>(const_cast<char *>(PROTECTED_ENTROPY)) };
+	DATA_BLOB out = { 0, nullptr };
+
+	if (!CryptUnprotectData(&in, nullptr, &entropy, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &out))
+	{
+		throw std::exception("Encrypted clip data could not be decrypted.");
+	}
+
+	std::string data(reinterpret_cast<const char *>(out.pbData), out.cbData);
+	SecureZeroMemory(out.pbData, out.cbData);
+	LocalFree(out.pbData);
+	return data;
 }
 
 // Writes all lines in a vector to a text file

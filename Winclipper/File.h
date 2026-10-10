@@ -30,6 +30,8 @@ public:
 	static void DeleteDir(std::wstring dirName);
 	static void Write(std::wstring filename, std::string data);
 	static std::string Read(std::wstring filename);
+	static void WriteProtected(std::wstring filename, const std::string & data);
+	static std::string ReadProtected(std::wstring filename, bool & wasPlaintext);
     static void WriteAllLines(const wchar_t* name, std::vector<std::wstring> lines);
     static std::vector<std::wstring> ReadAllLines(const wchar_t* name);
 

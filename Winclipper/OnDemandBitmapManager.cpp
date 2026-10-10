@@ -21,7 +21,7 @@ std::string OnDemandBitmapManager::Add(std::shared_ptr<Bitmap> bitmap)
 		std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
 		auto path = File::JoinPath(GetCacheDir(), converter.from_bytes(guid));
 
-		File::Write(path, bitmap->Serialize());
+		File::WriteProtected(path, bitmap->Serialize());
 	}
 
 	{
@@ -51,7 +51,13 @@ std::weak_ptr<Bitmap> OnDemandBitmapManager::Get(std::string guid)
 
 	// Load outside the lock so file I/O does not block other cache users.
 	std::shared_ptr<Bitmap> bitmap = std::make_shared<Bitmap>();
-	bitmap->Deserialize(File::Read(path));
+	bool wasPlaintext = false;
+	bitmap->Deserialize(File::ReadProtected(path, wasPlaintext));
+	if (wasPlaintext && saveToDisk)
+	{
+		// Cache file from an older version: replace it with an encrypted one.
+		File::WriteProtected(path, bitmap->Serialize());
+	}
 
 	std::lock_guard<std::mutex> lock(cacheMutex);
 	auto inserted = bitmapCache.emplace(guid, bitmap);
@@ -129,7 +135,7 @@ void OnDemandBitmapManager::SetSaveToDisk(bool newSaveToDisk)
 			{
 				std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
 				auto path = File::JoinPath(GetCacheDir(), converter.from_bytes(pair.first));
-				File::Write(path, pair.second->Serialize());
+				File::WriteProtected(path, pair.second->Serialize());
 				CreateAndSaveThumbnail(pair.first, pair.second);
 				UpdateUsage(pair.first);
 			}

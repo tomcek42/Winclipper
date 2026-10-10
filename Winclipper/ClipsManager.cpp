@@ -43,7 +43,7 @@ void ClipsManager::WriteClips()
     isWriterFinished = false;
 	try
 	{
-		File::Write(fullClipsPath, clips.Serialize());
+		File::WriteProtected(fullClipsPath, clips.Serialize());
 	}
 	catch (const std::exception& e)
 	{
@@ -58,7 +58,10 @@ void ClipsManager::ReadClips()
     {
 		try
 		{
-			clips.Deserialize(File::Read(fullClipsPath));
+			// A plaintext file from an older version is accepted once; the
+			// constructor saves right after reading, which encrypts it.
+			bool wasPlaintext = false;
+			clips.Deserialize(File::ReadProtected(fullClipsPath, wasPlaintext));
 		}
 		catch (const std::exception& e)
 		{
