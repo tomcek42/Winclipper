@@ -1,9 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-	<Product Id="*" Name="Winclipper" Language="1033" Version="1.4.2.0" Manufacturer="Carson Shook" UpgradeCode="34e3392e-e835-41c9-ac2b-f0c68176f4ca">
+	<Product Id="*" Name="Winclipper" Language="1033" Version="1.4.2.0" Manufacturer="Carson Shook" UpgradeCode="e64c8813-7d5e-4c7e-86f4-5482809b2f4e">
 		<Package InstallerVersion="301" Compressed="yes" InstallScope="perMachine" />
 
 		<MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+
+		<!-- Own UpgradeCode: an upstream MSI must not replace this hardened fork. -->
+		<!-- Upstream installs (any version) are removed so both do not coexist. -->
+		<Upgrade Id="34e3392e-e835-41c9-ac2b-f0c68176f4ca">
+			<UpgradeVersion Minimum="0.0.0.0" IncludeMinimum="yes" OnlyDetect="no" Property="UPSTREAMWINCLIPPERFOUND" />
+		</Upgrade>
 		<MediaTemplate EmbedCab="yes" />
 
     <Icon Id="Winclipper.ico" SourceFile="..\Winclipper\Winclipper.ico"/>
