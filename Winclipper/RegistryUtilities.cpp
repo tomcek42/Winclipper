@@ -2,107 +2,55 @@
 #include <string>
 #include "RegistryUtilities.h"
 
+// Reads a REG_DWORD value. RegGetValueW checks the type and the size, so a
+// value of another type (any user process can write HKCU) cannot overflow data.
+static bool ReadDword(HKEY root, const wchar_t * subKey, const wchar_t * name, DWORD & data)
+{
+	DWORD cbData = sizeof(data);
+	return RegGetValueW(root, subKey, name, RRF_RT_REG_DWORD, nullptr, &data, &cbData) == ERROR_SUCCESS;
+}
+
 unsigned int RegistryUtilities::GetWindows10ReleaseId()
 {
 	unsigned int retVal = 0;
-	HKEY hOpened;
+	wchar_t data[64];
+	DWORD cbData = sizeof(data);
 
-	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows NT\\CurrentVersion", 0, KEY_QUERY_VALUE, &hOpened) == ERROR_SUCCESS)
+	// RRF_RT_REG_SZ guarantees a NUL-terminated string within cbData.
+	if (RegGetValueW(HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\Windows NT\\CurrentVersion", L"ReleaseId",
+		RRF_RT_REG_SZ, nullptr, data, &cbData) == ERROR_SUCCESS)
 	{
-		if (QueryKeyForValue(hOpened, L"ReleaseId") == true)
+		try
 		{
-			const size_t bufferSize = 4096;
-			wchar_t data[bufferSize];
-			DWORD cbData = DWORD{ bufferSize };
-
-			// Really should check if ERROR_MORE_DATA is returned, but in practice this
-			// string should never be longer than 5 wchar_t, and if it ever is, we'll
-			// probably find plenty of time to prepare.
-			if (RegQueryValueExW(hOpened, L"ReleaseId", nullptr, nullptr, reinterpret_cast<LPBYTE>(&data), &cbData) == ERROR_SUCCESS)
-			{
-				try
-				{
-					retVal = std::stoi(data);
-				}
-				catch (const std::exception&)
-				{
-					retVal = 0;
-				}
-			}
+			retVal = std::stoi(data);
+		}
+		catch (const std::exception&)
+		{
+			retVal = 0;
 		}
 	}
-	RegCloseKey(hOpened);
 
 	return retVal;
 }
 
 bool RegistryUtilities::AppsUseLightTheme()
 {
-	bool retVal = true;
-	HKEY hOpened;
-
-	if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", 0, KEY_QUERY_VALUE, &hOpened) == ERROR_SUCCESS)
-	{
-		if (QueryKeyForValue(hOpened, L"AppsUseLightTheme") == true)
-		{
-			const size_t bufferSize = 4096;
-			INT32 data;
-			DWORD cbData = DWORD{ bufferSize };
-
-			if (RegQueryValueExW(hOpened, L"AppsUseLightTheme", nullptr, nullptr, reinterpret_cast<LPBYTE>(&data), &cbData) == ERROR_SUCCESS)
-			{
-				try
-				{
-					retVal = data == 1;
-				}
-				catch (const std::exception&)
-				{
-					retVal = true;
-				}
-			}
-		}
-	}
-	RegCloseKey(hOpened);
-
-	return retVal;
+	DWORD data = 0;
+	return !ReadDword(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", L"AppsUseLightTheme", data)
+		|| data == 1;
 }
 
 bool RegistryUtilities::ClipboardHistoryEnabled()
 {
-	bool retVal = false;
-	HKEY hOpened;
-
-	if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Clipboard", 0, KEY_QUERY_VALUE, &hOpened) == ERROR_SUCCESS)
-	{
-		if (QueryKeyForValue(hOpened, L"EnableClipboardHistory") == true)
-		{
-			const size_t bufferSize = 4096;
-			INT32 data;
-			DWORD cbData = DWORD{ bufferSize };
-
-			if (RegQueryValueExW(hOpened, L"EnableClipboardHistory", nullptr, nullptr, reinterpret_cast<LPBYTE>(&data), &cbData) == ERROR_SUCCESS)
-			{
-				try
-				{
-					retVal = data == 1;
-				}
-				catch (const std::exception&)
-				{
-					retVal = false;
-				}
-			}
-		}
-	}
-	RegCloseKey(hOpened);
-
-	return retVal;
+	DWORD data = 0;
+	return ReadDword(HKEY_CURRENT_USER, L"Software\\Microsoft\\Clipboard", L"EnableClipboardHistory", data) && data == 1;
 }
 
 bool RegistryUtilities::DisableClipboardHistory()
 {
 	HKEY hOpened;
 
-	if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Clipboard", 0, KEY_ALL_ACCESS, &hOpened) == ERROR_SUCCESS)
+	if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Clipboard", 0, KEY_SET_VALUE, &hOpened) == ERROR_SUCCESS)
 	{
 		DWORD lpData = 0;
 		RegSetKeyValueW(hOpened, nullptr, L"EnableClipboardHistory", REG_DWORD, reinterpret_cast<LPBYTE>(&lpData), sizeof(lpData));
@@ -118,33 +66,8 @@ bool RegistryUtilities::DisableClipboardHistory()
 
 bool RegistryUtilities::ClipboardStartupWarningDisabled()
 {
-	bool retVal = false;
-	HKEY hOpened;
-
-	if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Winclipper", 0, KEY_QUERY_VALUE, &hOpened) == ERROR_SUCCESS)
-	{
-		if (QueryKeyForValue(hOpened, L"DisableStartupWarning") == true)
-		{
-			const size_t bufferSize = 4096;
-			INT32 data;
-			DWORD cbData = DWORD{ bufferSize };
-
-			if (RegQueryValueExW(hOpened, L"DisableStartupWarning", nullptr, nullptr, reinterpret_cast<LPBYTE>(&data), &cbData) == ERROR_SUCCESS)
-			{
-				try
-				{
-					retVal = data == 1;
-				}
-				catch (const std::exception&)
-				{
-					retVal = false;
-				}
-			}
-		}
-	}
-	RegCloseKey(hOpened);
-
-	return retVal;
+	DWORD data = 0;
+	return ReadDword(HKEY_CURRENT_USER, L"Software\\Winclipper", L"DisableStartupWarning", data) && data == 1;
 }
 
 bool RegistryUtilities::DisableClipboardStartupWarning()
@@ -152,7 +75,7 @@ bool RegistryUtilities::DisableClipboardStartupWarning()
 	HKEY hOpened;
 	LPDWORD phkResult = nullptr;
 
-	if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Winclipper", 0, nullptr, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, nullptr, &hOpened, phkResult) == ERROR_SUCCESS)
+	if (RegCreateKeyExW(HKEY_CURRENT_USER, L"Software\\Winclipper", 0, nullptr, REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, nullptr, &hOpened, phkResult) == ERROR_SUCCESS)
 	{
 		DWORD lpData = 1;
 		RegSetKeyValueW(hOpened, nullptr, L"DisableStartupWarning", REG_DWORD, reinterpret_cast<LPBYTE>(&lpData), sizeof(lpData));
