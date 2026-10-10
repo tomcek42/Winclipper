@@ -1,7 +1,7 @@
 # Winclipper — Security-Review & Backlog
 
 Stand: 2026-10-10. Fork `tomcek42/Winclipper`, upstream `Carson-Shook/Winclipper` (keine Merges mehr geplant).
-Status: Persistenzschicht geprüft und gehärtet (F1, F3–F7 behoben). Offen: F2, F5-Rest, ungeprüfte Bereiche unten.
+Status: Persistenzschicht geprüft und gehärtet (F1, F3–F7 behoben). Offen: F2, ungeprüfte Bereiche unten.
 
 | Befund | Status | Commit |
 |---|---|---|
@@ -9,7 +9,7 @@ Status: Persistenzschicht geprüft und gehärtet (F1, F3–F7 behoben). Offen: F
 | F2 Klartext-Clips | offen (Designentscheidung, M002) | — |
 | F3 `File::Delete` invertiert | behoben | `3daeee5` |
 | F4 `DeleteDir` NUL-Terminierung | behoben | `297178c` |
-| F5 Datenrennen | teilweise behoben, Rest siehe F5 | `29064a4`, `89881b4` |
+| F5 Datenrennen | behoben | `29064a4`, `89881b4`, `7139a8a`, `bf88a47` |
 | F6 `JoinPath` leerer String | behoben | `25f005a` |
 | F7 Absturz bei ungültiger `settings.dat` | behoben | `834a6ca` |
 
@@ -78,9 +78,10 @@ Fix: `std::mutex` bzw. `std::atomic<int>`.
 
 Behoben: Bitmap-Cache, `ClipsManager`-/`UserSettings`-Writer, `Clip::pBitmap` und Lade-Merker. Nebenbei behoben:
 Use-after-free durch `c_str()` eines lokalen Strings an detachte `File::Delete`-Threads.
-Offen:
-- `Clip::EnsureBitmapAsync` übergibt dem detachten Thread rohes `this` → Use-after-free, wenn der Clip vorher gelöscht wird.
-- Writer-Thread liest `ClipsCollection` (`ClipsManager::WriteClips`), während der UI-Thread sie verändert.
+Ebenfalls behoben:
+- `Clip::EnsureBitmapAsync` übergab dem detachten Thread rohes `this` → jetzt `shared_from_this()` (`7139a8a`).
+- Writer-Thread las `ClipsCollection`, während der UI-Thread sie veränderte → `std::mutex` in `ClipsCollection`,
+  Serialisierung und Datei-I/O auf einer Kopie der `shared_ptr`-Liste außerhalb der Sperre (`bf88a47`).
 
 ### F6 — `File::JoinPath` mit leerem String ist UB (`Winclipper/File.cpp:17-31`)
 `retVal.back()` / `retVal2.front()` auf leerem `std::wstring`. Erreichbar, falls `SHGetKnownFolderPath` je einen
@@ -100,6 +101,5 @@ Eintrag übersprungen und der Standardwert behalten. Gültige Zahlen begrenzen d
 
 ## Nächste Schritte
 
-1. F5-Rest: Lebensdauer der Lade-Threads in `Clip`, Sperre um `ClipsCollection`.
-2. Update-Mechanismus (`SSUPConfig.xml`) prüfen — hohe Priorität.
-3. F2 (DPAPI) nach Designentscheidung.
+1. Update-Mechanismus (`SSUPConfig.xml`) prüfen — hohe Priorität.
+2. F2 (DPAPI) nach Designentscheidung.
