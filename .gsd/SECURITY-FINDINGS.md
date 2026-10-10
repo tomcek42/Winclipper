@@ -1,7 +1,7 @@
 # Winclipper — Security-Review & Backlog
 
 Stand: 2026-10-10. Fork `tomcek42/Winclipper`, upstream `Carson-Shook/Winclipper` (keine Merges mehr geplant).
-Status: Persistenzschicht gehärtet, Auto-Updater entfernt (F1, F3–F9 behoben). Offen: F2, ungeprüfte Bereiche unten.
+Status: Persistenzschicht gehärtet, Auto-Updater entfernt (F1, F3–F10 behoben). Offen: F2, ungeprüfte Bereiche unten.
 
 | Befund | Status | Commit |
 |---|---|---|
@@ -14,6 +14,7 @@ Status: Persistenzschicht gehärtet, Auto-Updater entfernt (F1, F3–F9 behoben)
 | F7 Absturz bei ungültiger `settings.dat` | behoben | `834a6ca` |
 | F8 Fremder Auto-Updater ohne Signaturprüfung | behoben | `69637f4`, `c1bbfb3` |
 | F9 Ungeprüfte DIB-Daten aus der Zwischenablage | behoben | `2191642` |
+| F10 Unbegrenztes Lesen von `CF_UNICODETEXT` | behoben | `2bc2715` |
 
 ## Build-Setup (verifiziert)
 
@@ -113,16 +114,17 @@ automatisch. Der Header wurde nicht gegen `GlobalSize` geprüft: `biSizeImage`/`
 `CopyClipboardDib` prüft jedes Feld gegen die Blockgröße mit denselben Regeln wie `Bitmap::Deserialize`, speichert
 nur einen `BITMAPINFOHEADER` (Masken aus V4/V5-Headern werden übernommen) und fängt `bad_alloc` ab.
 
-Offen (Folgepunkt): Der `CF_UNICODETEXT`-Pfad liest den Text per `GlobalLock` ohne Längengrenze; fehlt die
-NUL-Terminierung, liest er über den Block hinaus.
+### F10 — Unbegrenztes Lesen von `CF_UNICODETEXT` (`Winclipper/ClipsManager.cpp`, `AddToClips`) — mittel
+Der Text wurde bis zur ersten NUL gelesen. Ein Prozess kann unterminierten Text in die Zwischenablage legen, dann
+las Winclipper über das Ende des Blocks hinaus (Over-Read, Absturz oder Fremddaten im Clip). Fix: Länge per
+`wcsnlen` auf `GlobalSize / sizeof(wchar_t)` begrenzt.
 
 ## Noch nicht geprueft
 
 - `MainWindow.cpp` / Fensternachrichten-Handling
-- Zwischenablage-Erfassung: Textpfad (siehe F9), Ownership
+- Zwischenablage-Erfassung: Ownership
 - `RegistryUtilities.cpp` (Autostart)
 
 ## Nächste Schritte
 
-1. F9-Folgepunkt: `CF_UNICODETEXT` auf `GlobalSize` begrenzen.
-2. F2 (DPAPI) nach Designentscheidung.
+1. F2 (DPAPI) nach Designentscheidung.
