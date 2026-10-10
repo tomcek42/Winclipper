@@ -24,7 +24,10 @@ std::string OnDemandBitmapManager::Add(std::shared_ptr<Bitmap> bitmap)
 		File::Write(path, bitmap->Serialize());
 	}
 
-	bitmapCache[guid] = bitmap;
+	{
+		std::lock_guard<std::mutex> lock(cacheMutex);
+		bitmapCache[guid] = bitmap;
+	}
 
 	UpdateUsage(guid);
 	RunCleanupAsync();
@@ -34,31 +37,29 @@ std::string OnDemandBitmapManager::Add(std::shared_ptr<Bitmap> bitmap)
 
 std::weak_ptr<Bitmap> OnDemandBitmapManager::Get(std::string guid)
 {
-	std::weak_ptr<Bitmap> retVal;
-
-	if (bitmapCache.find(guid) != bitmapCache.end())
 	{
-		retVal = bitmapCache.at(guid);
-	}
-	else
-	{
-		std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-		auto path = File::JoinPath(GetCacheDir(), converter.from_bytes(guid));
-
-		std::shared_ptr<Bitmap> bitmap = std::make_shared<Bitmap>();
-
-		bitmap->Deserialize(File::Read(path));
-		retVal = bitmapCache[guid] = bitmap;
-
-		while (inCriticalSection)
+		std::lock_guard<std::mutex> lock(cacheMutex);
+		auto it = bitmapCache.find(guid);
+		if (it != bitmapCache.end())
 		{
-			Sleep(10);
+			return it->second;
 		}
-		inCriticalSection = true;
-		usageList.push_front(guid);
-		inCriticalSection = false;
 	}
-	return retVal;
+
+	std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+	auto path = File::JoinPath(GetCacheDir(), converter.from_bytes(guid));
+
+	// Load outside the lock so file I/O does not block other cache users.
+	std::shared_ptr<Bitmap> bitmap = std::make_shared<Bitmap>();
+	bitmap->Deserialize(File::Read(path));
+
+	std::lock_guard<std::mutex> lock(cacheMutex);
+	auto inserted = bitmapCache.emplace(guid, bitmap);
+	if (inserted.second)
+	{
+		usageList.push_front(guid);
+	}
+	return inserted.first->second;
 }
 
 void OnDemandBitmapManager::Remove(std::string guid)
@@ -66,13 +67,11 @@ void OnDemandBitmapManager::Remove(std::string guid)
 	std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
 	auto path = File::JoinPath(GetCacheDir(), converter.from_bytes(guid));
 
-	while (inCriticalSection)
-	{
-		Sleep(10);
-	}
-	inCriticalSection = true;
+	// The thread must own its copy of the path; a pointer into the
+	// local string would dangle once this function returns.
+	std::thread([path]() { File::Delete(path.c_str()); }).detach();
 
-	std::thread(File::Delete, path.c_str()).detach();
+	std::lock_guard<std::mutex> lock(cacheMutex);
 	bitmapCache.erase(guid);
 
 	if (!usageList.empty())
@@ -83,7 +82,6 @@ void OnDemandBitmapManager::Remove(std::string guid)
 			usageList.erase(findValue);
 		}
 	}
-	inCriticalSection = false;
 }
 
 bool OnDemandBitmapManager::Exists(std::string guid)
@@ -114,20 +112,20 @@ void OnDemandBitmapManager::SetSaveToDisk(bool newSaveToDisk)
 	{
 		saveToDisk = newSaveToDisk;
 
-		while (inCriticalSection)
+		// Wait for a running cleanup to finish.
 		{
-			Sleep(10);
+			std::lock_guard<std::mutex> cleanupLock(cleanupMutex);
 		}
-
-		while (!cleanupMutex.try_lock())
-		{
-			Sleep(1);
-		}
-		cleanupMutex.unlock();
 
 		if (saveToDisk)
 		{
-			for (const auto &pair : bitmapCache)
+			// Iterate a snapshot: UpdateUsage takes cacheMutex itself.
+			std::map<std::string, std::shared_ptr<Bitmap>> snapshot;
+			{
+				std::lock_guard<std::mutex> lock(cacheMutex);
+				snapshot = bitmapCache;
+			}
+			for (const auto &pair : snapshot)
 			{
 				std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
 				auto path = File::JoinPath(GetCacheDir(), converter.from_bytes(pair.first));
@@ -344,7 +342,7 @@ void OnDemandBitmapManager::RemoveThumbnail(std::string guid, bool async)
 	
 	if (async)
 	{
-		std::thread(File::Delete, (path + L"-thumb").c_str()).detach();
+		std::thread([thumbPath = path + L"-thumb"]() { File::Delete(thumbPath.c_str()); }).detach();
 	}
 	else
 	{
@@ -384,29 +382,25 @@ std::string OnDemandBitmapManager::CreateGuidString()
 
 void OnDemandBitmapManager::UpdateUsage(std::string guid)
 {
-	while (inCriticalSection)
+	bool changed = false;
 	{
-		Sleep(10);
-	}
+		std::lock_guard<std::mutex> lock(cacheMutex);
+		auto findValue = std::find(usageList.begin(), usageList.end(), guid);
 
-	inCriticalSection = true;
-
-	auto findValue = std::find(usageList.begin(), usageList.end(), guid);
-
-	if (findValue != usageList.begin())
-	{
-		if (findValue != usageList.end())
+		if (findValue != usageList.begin())
 		{
-			usageList.erase(findValue);
+			if (findValue != usageList.end())
+			{
+				usageList.erase(findValue);
+			}
+			usageList.push_front(guid);
+			changed = true;
 		}
-		usageList.push_front(guid);
-
-		inCriticalSection = false;
-		RunCleanupAsync();
 	}
-	else
+
+	if (changed)
 	{
-		inCriticalSection = false;
+		RunCleanupAsync();
 	}
 }
 
@@ -414,37 +408,26 @@ void OnDemandBitmapManager::SafeClose()
 {
 	safeClosing = true;
 
-	while (inCriticalSection)
-	{
-		Sleep(10);
-	}
-
-	while (!cleanupMutex.try_lock())
-	{
-		Sleep(1);
-	}
-	cleanupMutex.unlock();
+	// Wait for a running cleanup and any in-flight cache access.
+	std::lock_guard<std::mutex> cleanupLock(cleanupMutex);
+	std::lock_guard<std::mutex> lock(cacheMutex);
 }
 
 void OnDemandBitmapManager::RunCleanupAsync()
 {
 	if (saveToDisk)
 	{
-		if (cleanupWaitCount == 0)
+		// Only the caller that raises the count from 0 starts the worker.
+		if (cleanupWaitCount++ == 0)
 		{
-			cleanupWaitCount++;
 			std::thread(RunCleanupInternal).detach();
-		}
-		else
-		{
-			cleanupWaitCount++;
 		}
 	}
 }
 
 void OnDemandBitmapManager::RunCleanupInternal()
 {
-	cleanupMutex.lock();
+	std::lock_guard<std::mutex> cleanupLock(cleanupMutex);
 	while (cleanupWaitCount != 0 && !safeClosing)
 	{
 		// effective 5 second delay, but allows
@@ -460,15 +443,9 @@ void OnDemandBitmapManager::RunCleanupInternal()
 		cleanupWaitCount--;
 	}
 	
-	while (inCriticalSection && !safeClosing)
-	{
-		Sleep(10);
-	}
-
+	std::lock_guard<std::mutex> lock(cacheMutex);
 	if (!usageList.empty() && !safeClosing)
 	{
-		inCriticalSection = true;
-
 		unsigned long long currentSize = 0;
 		std::map<std::string, std::shared_ptr<Bitmap>>::iterator it;
 		for (it = bitmapCache.begin(); it != bitmapCache.end(); it++)
@@ -479,21 +456,24 @@ void OnDemandBitmapManager::RunCleanupInternal()
 		}
 
 		long references = 0;
-		while (currentSize > maxBytes && references < 2)
+		while (currentSize > maxBytes && references < 2 && !usageList.empty())
 		{
 			auto key = usageList.back();
-			references = bitmapCache.at(key).use_count();
+			auto cached = bitmapCache.find(key);
+			if (cached == bitmapCache.end())
+			{
+				usageList.pop_back();
+				continue;
+			}
+			references = cached->second.use_count();
 			if (references < 2)
 			{
-				currentSize -= static_cast<unsigned long long>(bitmapCache.at(key)->Size()) * 2;
-				bitmapCache.erase(key);
+				currentSize -= static_cast<unsigned long long>(cached->second->Size()) * 2;
+				bitmapCache.erase(cached);
 				usageList.pop_back();
 			}
 		}
-
-		inCriticalSection = false;
 	}
-	cleanupMutex.unlock();
 }
 
 IWICImagingFactory * OnDemandBitmapManager::GetWICFactory()
@@ -517,9 +497,9 @@ std::wstring OnDemandBitmapManager::cacheDir;
 std::map<std::string, std::shared_ptr<Bitmap>> OnDemandBitmapManager::bitmapCache;
 std::deque<std::string> OnDemandBitmapManager::usageList;
 
-unsigned long long OnDemandBitmapManager::maxBytes = 104857600; // 100 MB
-unsigned int OnDemandBitmapManager::cleanupWaitCount = 0;
-bool OnDemandBitmapManager::saveToDisk = true;
-bool OnDemandBitmapManager::inCriticalSection = false;
-bool OnDemandBitmapManager::safeClosing = false;
+std::atomic<unsigned long long> OnDemandBitmapManager::maxBytes{ 104857600 }; // 100 MB
+std::atomic<unsigned int> OnDemandBitmapManager::cleanupWaitCount{ 0 };
+std::atomic<bool> OnDemandBitmapManager::saveToDisk{ true };
+std::atomic<bool> OnDemandBitmapManager::safeClosing{ false };
+std::mutex OnDemandBitmapManager::cacheMutex;
 std::mutex OnDemandBitmapManager::cleanupMutex;

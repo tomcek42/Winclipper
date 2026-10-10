@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include "resource.h"
 #include "UserSettings.h"
 #include "File.h"
@@ -29,11 +30,11 @@ private:
     std::wstring                    fullClipsPath;
     ClipsCollection					clips;
 
-    int                             clipsWriterWaitCount = 0;
-    bool                            isWriterFinished = true;
+    std::atomic<int>                clipsWriterWaitCount{ 0 };
+    std::atomic<bool>               isWriterFinished{ true };
 
     void                            SaveClipsAsync();
-    static void                     DelayClipsWriter(int* waitCount, ClipsManager* cs);
+    static void                     DelayClipsWriter(std::atomic<int>* waitCount, ClipsManager* cs);
     void                            WriteClips();
     void                            ReadClips();
 	bool							SendPasteInput(void) noexcept;

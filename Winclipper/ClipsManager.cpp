@@ -6,14 +6,13 @@ void ClipsManager::SaveClipsAsync()
 {
     if (UserSettings::SaveToDisk())
     {
-        if (clipsWriterWaitCount == 0)
+        // Only the caller that raises the count from 0 starts the writer.
+        if (clipsWriterWaitCount++ == 0)
         {
-            clipsWriterWaitCount++;
-            std::thread([&]() {DelayClipsWriter(&clipsWriterWaitCount, this); }).detach();
-        }
-        else
-        {
-            clipsWriterWaitCount++;
+            // Mark pending before the thread starts so NoPendingClipWrites
+            // cannot report idle between the count reaching 0 and WriteClips.
+            isWriterFinished = false;
+            std::thread([this]() { DelayClipsWriter(&clipsWriterWaitCount, this); }).detach();
         }
     }
     else
@@ -25,7 +24,7 @@ void ClipsManager::SaveClipsAsync()
     }
 }
 
-void ClipsManager::DelayClipsWriter(int * waitCount, ClipsManager * cs)
+void ClipsManager::DelayClipsWriter(std::atomic<int> * waitCount, ClipsManager * cs)
 {
     while (*waitCount != 0)
     {

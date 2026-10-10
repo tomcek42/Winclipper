@@ -1,5 +1,6 @@
 #pragma once
 #include "Bitmap.h"
+#include <atomic>
 #include <mutex>
 #include <wincodec.h>
 #include <wincodecsdk.h>
@@ -45,11 +46,12 @@ private:
 	static std::map<std::string, std::shared_ptr<Bitmap>> bitmapCache;
 	static std::deque<std::string>	usageList;
 
-	static unsigned long long		maxBytes;
-	static unsigned int				cleanupWaitCount;
-	static bool						saveToDisk;
-	static bool						inCriticalSection;
-	static bool						safeClosing;
+	static std::atomic<unsigned long long>	maxBytes;
+	static std::atomic<unsigned int>		cleanupWaitCount;
+	static std::atomic<bool>				saveToDisk;
+	static std::atomic<bool>				safeClosing;
+	// Guards bitmapCache and usageList.
+	static std::mutex				cacheMutex;
 	static std::mutex				cleanupMutex;
 };
 
