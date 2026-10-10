@@ -240,3 +240,22 @@ ModelManifest.xml
 
 # FAKE - F# Make
 .fake/
+
+# Lokale Werkzeugkonfiguration (rechnerspezifische Pfade)
+.mcp.json
+.claude/settings.local.json
+.bg-shell/
+
+# GSD-Laufzeitzustand (Quelle ist .gsd/gsd.db, nur lokal)
+.gsd/gsd.db*
+.gsd/runtime/
+.gsd/audit/
+.gsd/quarantine/
+.gsd/migration/
+.gsd/*.jsonl
+.gsd/state.json
+.gsd/state-manifest.json
+.gsd/last-snapshot.md
+.gsd/.compat.json
+.gsd/STATE.md
+.gsd/CODEBASE.md
