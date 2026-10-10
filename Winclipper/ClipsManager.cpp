@@ -141,6 +141,7 @@ ClipsManager::ClipsManager()
 
 	windows10ReleaseId = RegistryUtilities::GetWindows10ReleaseId();
 
+	OnDemandBitmapManager::ProtectDiskCache();
 	ReadClips();
     UpdateMaxClips();
 	UpdateSavedImages();

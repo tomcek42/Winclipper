@@ -147,6 +147,56 @@ void OnDemandBitmapManager::DeleteAllFromDisk()
 	File::DeleteDir(GetCacheDir());
 }
 
+// Older versions stored every bitmap and its thumbnail as plaintext BMP.
+// Get only migrates a bitmap when it is loaded, which may never happen,
+// so encrypt all remaining plaintext files and drop the thumbnails once
+// at startup. The bytes are rewritten as-is and not parsed here.
+void OnDemandBitmapManager::ProtectDiskCache()
+{
+	const std::wstring dir = GetCacheDir();
+	WIN32_FIND_DATAW findData;
+	HANDLE hFind = FindFirstFileW(File::JoinPath(dir, L"*").c_str(), &findData);
+	if (hFind == INVALID_HANDLE_VALUE)
+	{
+		return;
+	}
+
+	do
+	{
+		if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+		{
+			continue;
+		}
+
+		const std::wstring name(findData.cFileName);
+		const std::wstring path = File::JoinPath(dir, name);
+		const std::wstring thumbSuffix(L"-thumb");
+
+		if (name.size() > thumbSuffix.size()
+			&& name.compare(name.size() - thumbSuffix.size(), thumbSuffix.size(), thumbSuffix) == 0)
+		{
+			File::Delete(path.c_str());
+			continue;
+		}
+
+		try
+		{
+			bool wasPlaintext = false;
+			std::string data = File::ReadProtected(path, wasPlaintext);
+			if (wasPlaintext)
+			{
+				File::WriteProtected(path, data);
+			}
+		}
+		catch (const std::exception&)
+		{
+			// Undecryptable files are rejected when the clip loads them.
+		}
+	} while (FindNextFileW(hFind, &findData));
+
+	FindClose(hFind);
+}
+
 // Thumbnails are kept in memory only: a file on disk would be an
 // unencrypted copy of the clip image.
 HBITMAP OnDemandBitmapManager::CreateThumbnail(std::shared_ptr<Bitmap> bitmap)
