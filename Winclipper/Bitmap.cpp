@@ -56,62 +56,89 @@ std::string Bitmap::Serialize()
 
 void Bitmap::Deserialize(std::string serializationData)
 {
+	// The data comes from BitmapCache\ and is untrusted: every field is
+	// validated before it drives an allocation or a read.
 	const size_t dataLength = serializationData.length();
-	if (dataLength != 0)
-	{
-		try
-		{
-			BITMAPFILEHEADER header;
-			std::shared_ptr<BITMAPINFOHEADER> bmih = std::make_shared<BITMAPINFOHEADER>();
-			std::vector<RGBQUAD> quads;
-
-			std::istringstream stream(serializationData);
-
-			stream.readsome(reinterpret_cast<char *>(&header), sizeof(BITMAPFILEHEADER));
-			stream.readsome(reinterpret_cast<char *>(bmih.get()), sizeof(BITMAPINFOHEADER));
-
-			unsigned int colorBytes = bmih->biClrUsed;
-			if (!colorBytes)
-			{
-				if (bmih->biBitCount <= 8)
-				{
-					colorBytes = 1 << bmih->biBitCount;
-				}
-				else if (bmih->biBitCount != 24 && bmih->biCompression == BI_BITFIELDS)
-				{
-					colorBytes = 3;
-				}
-			}
-
-			for (unsigned int i = 0; i < colorBytes; i++)
-			{
-				RGBQUAD quad = { 0, 0, 0, 0 };
-				stream.readsome(reinterpret_cast<char *>(&quad), sizeof(RGBQUAD));
-
-				quads.push_back(quad);
-			}
-
-			const size_t bmSize = header.bfSize - header.bfOffBits;
-
-			std::shared_ptr<BYTE> bits(new BYTE[bmSize], array_deleter<BYTE>());
-
-			stream.readsome(reinterpret_cast<char *>(bits.get()), bmSize);
-
-			pDibBitmapInfoHeader = bmih;
-			rgbQuadCollection = quads;
-			pDibBitmapBits = bits;
-
-			GetHbitmap();
-		}
-		catch (const std::exception&)
-		{
-			throw std::exception("Image data is corrupt and could not be loaded.");
-		}
-	}
-	else
+	if (dataLength == 0)
 	{
 		throw std::exception("Image data is empty or missing.");
 	}
+
+	const char * data = serializationData.data();
+	size_t offset = 0;
+
+	BITMAPFILEHEADER header;
+	auto bmih = std::make_shared<BITMAPINFOHEADER>();
+	if (dataLength < sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER))
+	{
+		throw std::exception("Image data is corrupt and could not be loaded.");
+	}
+	memcpy(&header, data + offset, sizeof(BITMAPFILEHEADER));
+	offset += sizeof(BITMAPFILEHEADER);
+	memcpy(bmih.get(), data + offset, sizeof(BITMAPINFOHEADER));
+	offset += sizeof(BITMAPINFOHEADER);
+
+	// Only a plain BITMAPINFOHEADER is stored; a larger biSize from the file
+	// would make CreateDIBitmap read past it.
+	bmih->biSize = sizeof(BITMAPINFOHEADER);
+
+	const WORD bitCount = bmih->biBitCount;
+	if (header.bfType != 0x4d42
+		|| bmih->biWidth <= 0
+		|| bmih->biHeight == 0
+		|| bmih->biHeight == LONG_MIN
+		|| bmih->biPlanes != 1
+		|| (bitCount != 1 && bitCount != 4 && bitCount != 8
+			&& bitCount != 16 && bitCount != 24 && bitCount != 32)
+		|| (bmih->biCompression != BI_RGB && bmih->biCompression != BI_BITFIELDS))
+	{
+		throw std::exception("Image data is corrupt and could not be loaded.");
+	}
+
+	unsigned int colorBytes = bmih->biClrUsed;
+	if (!colorBytes)
+	{
+		if (bitCount <= 8)
+		{
+			colorBytes = 1u << bitCount;
+		}
+		else if (bitCount != 24 && bmih->biCompression == BI_BITFIELDS)
+		{
+			colorBytes = 3;
+		}
+	}
+	const unsigned int maxColors = bitCount <= 8 ? (1u << bitCount) : 256u;
+	if (colorBytes > maxColors
+		|| colorBytes * sizeof(RGBQUAD) > dataLength - offset)
+	{
+		throw std::exception("Image data is corrupt and could not be loaded.");
+	}
+
+	std::vector<RGBQUAD> quads(colorBytes);
+	if (colorBytes > 0)
+	{
+		memcpy(quads.data(), data + offset, colorBytes * sizeof(RGBQUAD));
+		offset += colorBytes * sizeof(RGBQUAD);
+	}
+
+	// The buffer must cover what CreateDIBitmap reads (derived from the
+	// header), and the file must actually contain that many bytes.
+	const unsigned long long minimumSize = ComputeImageSize(*bmih);
+	const unsigned long long bmSize = bmih->biSizeImage > minimumSize ? bmih->biSizeImage : minimumSize;
+	if (minimumSize == 0 || bmSize > dataLength - offset)
+	{
+		throw std::exception("Image data is corrupt and could not be loaded.");
+	}
+	bmih->biSizeImage = static_cast<DWORD>(bmSize);
+
+	std::shared_ptr<BYTE> bits(new BYTE[static_cast<size_t>(bmSize)], array_deleter<BYTE>());
+	memcpy(bits.get(), data + offset, static_cast<size_t>(bmSize));
+
+	pDibBitmapInfoHeader = bmih;
+	rgbQuadCollection = quads;
+	pDibBitmapBits = bits;
+
+	GetHbitmap();
 }
 
 /* End ISerializable implementation */
@@ -166,6 +193,22 @@ HBITMAP Bitmap::GetHbitmap()
 	return hBitmap;
 }
 
+// Returns the uncompressed size of the pixel data described by the header,
+// or 0 if it does not fit in a DWORD.
+unsigned long long Bitmap::ComputeImageSize(const BITMAPINFOHEADER & bmih) noexcept
+{
+	if (bmih.biWidth <= 0 || bmih.biHeight == 0 || bmih.biHeight == LONG_MIN)
+	{
+		return 0;
+	}
+	const unsigned long long stride = ((static_cast<unsigned long long>(bmih.biWidth) * bmih.biBitCount + 31) & ~31ull) >> 3;
+	const unsigned long long height = bmih.biHeight < 0
+		? static_cast<unsigned long long>(-static_cast<long long>(bmih.biHeight))
+		: static_cast<unsigned long long>(bmih.biHeight);
+	const unsigned long long size = stride * height;
+	return size > MAXDWORD ? 0 : size;
+}
+
 // Returns the size of the image in bytes.
 DWORD Bitmap::Size() noexcept
 {
@@ -174,7 +217,7 @@ DWORD Bitmap::Size() noexcept
 	{
 		retVal = pDibBitmapInfoHeader->biSizeImage
 			? pDibBitmapInfoHeader->biSizeImage
-			: ((((pDibBitmapInfoHeader->biWidth * pDibBitmapInfoHeader->biBitCount) + 31) & ~31) >> 3) * pDibBitmapInfoHeader->biHeight;
+			: static_cast<DWORD>(ComputeImageSize(*pDibBitmapInfoHeader));
 	}
 
 	return retVal;

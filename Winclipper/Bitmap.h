@@ -19,6 +19,7 @@ public:
 	DWORD										Size() noexcept;
 
 private:
+	static unsigned long long				ComputeImageSize(const BITMAPINFOHEADER & bmih) noexcept;
 	std::shared_ptr<BITMAPINFOHEADER>			pDibBitmapInfoHeader = nullptr;
 	std::vector<RGBQUAD>						rgbQuadCollection;
 	std::shared_ptr<BYTE>						pDibBitmapBits = nullptr;
