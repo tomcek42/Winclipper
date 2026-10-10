@@ -1,7 +1,17 @@
 # Winclipper — Security-Review & Backlog
 
-Stand: 2026-09-04. Fork `tomcek42/Winclipper` @ `b8b0e7d` (Release 1.4.2), upstream `Carson-Shook/Winclipper`.
-Status: Review der Persistenzschicht abgeschlossen, Rest offen. Noch **nichts committet**.
+Stand: 2026-10-10. Fork `tomcek42/Winclipper`, upstream `Carson-Shook/Winclipper` (keine Merges mehr geplant).
+Status: Persistenzschicht geprüft und gehärtet (F1, F3–F7 behoben). Offen: F2, F5-Rest, ungeprüfte Bereiche unten.
+
+| Befund | Status | Commit |
+|---|---|---|
+| F1 Heap-Over-Read Bitmap | behoben | `ac6d8aa` |
+| F2 Klartext-Clips | offen (Designentscheidung, M002) | — |
+| F3 `File::Delete` invertiert | behoben | `3daeee5` |
+| F4 `DeleteDir` NUL-Terminierung | behoben | `297178c` |
+| F5 Datenrennen | teilweise behoben, Rest siehe F5 | `29064a4`, `89881b4` |
+| F6 `JoinPath` leerer String | behoben | `25f005a` |
+| F7 Absturz bei ungültiger `settings.dat` | behoben | `834a6ca` |
 
 ## Build-Setup (verifiziert)
 
@@ -14,7 +24,6 @@ Status: Review der Persistenzschicht abgeschlossen, Rest offen. Noch **nichts co
   Echter Upstream-Bug: ausser dem Autor konnte niemand bauen.
 - NuGet-Paket **WiX 3.11** wird von `Winclipper.vcxproj` erzwungen; nach `Winclipper/packages/WiX.3.11.0/` entpackt.
   Setup-Projekte brauchen zusaetzlich die WiX-Toolset-Build-Tools; fuer die reine EXE nicht noetig.
-- Repo hat **keine `.gitignore`** — `packages/`, `x64/`, `Debug/`, `Release/` gehoeren hinein.
 
 ## Angreifermodell
 
@@ -67,26 +76,30 @@ Nicht-atomares `bool` als Spinlock; Test und Setzen nicht atomar. Gleiches Muste
 (`ClipsManager.cpp:5-38`), manipuliert aus einem detachten Thread ohne Synchronisation.
 Fix: `std::mutex` bzw. `std::atomic<int>`.
 
+Behoben: Bitmap-Cache, `ClipsManager`-/`UserSettings`-Writer, `Clip::pBitmap` und Lade-Merker. Nebenbei behoben:
+Use-after-free durch `c_str()` eines lokalen Strings an detachte `File::Delete`-Threads.
+Offen:
+- `Clip::EnsureBitmapAsync` übergibt dem detachten Thread rohes `this` → Use-after-free, wenn der Clip vorher gelöscht wird.
+- Writer-Thread liest `ClipsCollection` (`ClipsManager::WriteClips`), während der UI-Thread sie verändert.
+
 ### F6 — `File::JoinPath` mit leerem String ist UB (`Winclipper/File.cpp:17-31`)
 `retVal.back()` / `retVal2.front()` auf leerem `std::wstring`. Erreichbar, falls `SHGetKnownFolderPath` je einen
 leeren Pfad liefert.
+
+### F7 — Ungültige `settings.dat` bricht jeden Start ab (`Winclipper/UserSettings.cpp`, `Deserialize`)
+`stoi`/`stous` auf Dateiwerte ohne `try`; `1|abc` wirft eine ungefangene Exception beim Start. Jetzt wird der
+Eintrag übersprungen und der Standardwert behalten. Gültige Zahlen begrenzen die Setter ohnehin auf ihren Bereich.
 
 ## Noch nicht geprueft
 
 - `MainWindow.cpp` / Fensternachrichten-Handling
 - Zwischenablage-Erfassung selbst (Formate, Ownership, Groessenlimits)
 - `RegistryUtilities.cpp` (Autostart)
-- `UserSettings.cpp`-Parsing (518 Zeilen, dateibasiert, ebenfalls unvalidiert)
 - Update-Mechanismus: `SSUPConfig.xml` in beiden Setup-Projekten deutet auf einen hin — Update-Kanaele sind
   klassisch fuer unsignierte Downloads. Hohe Prioritaet.
 
-## Vorgeschlagenes Vorgehen (offen, wartet auf Entscheidung)
+## Nächste Schritte
 
-1. F3, F4, F6 sofort fixen — klein, risikoarm.
-2. F1 als eigener Commit: Haertung des Bitmap-Parsers.
-3. F2 und F5 als separate Vorhaben — Designaenderungen.
-
-Offene Fragen an den Nutzer:
-- Eigener Branch fuer den `vcxproj`-Pfadfix? (Nicht pushen ohne Freigabe.)
-- `.gitignore` anlegen?
-- Erst Review fertigmachen, oder parallel schon fixen?
+1. F5-Rest: Lebensdauer der Lade-Threads in `Clip`, Sperre um `ClipsCollection`.
+2. Update-Mechanismus (`SSUPConfig.xml`) prüfen — hohe Priorität.
+3. F2 (DPAPI) nach Designentscheidung.
