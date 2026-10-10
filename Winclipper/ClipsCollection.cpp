@@ -16,8 +16,9 @@ ClipsCollection::~ClipsCollection()
 
 std::string ClipsCollection::Serialize()
 {
+	// Serialize a copy so the UI thread is not blocked while clips are encoded.
 	std::string data;
-	for (auto clip : clips)
+	for (auto clip : Snapshot())
 	{
 		try
 		{
@@ -53,6 +54,7 @@ void ClipsCollection::Deserialize(std::string serializationData)
 				clip->Deserialize(readData);
 				if (clip->AnyFormats())
 				{
+					std::lock_guard<std::mutex> lock(clipsMutex);
 					clips.push_back(clip);
 				}
 			}
@@ -83,6 +85,7 @@ void ClipsCollection::Deserialize(std::string serializationData)
 
 void ClipsCollection::AddFront(std::shared_ptr<Clip> clip)
 {
+	std::lock_guard<std::mutex> lock(clipsMutex);
 	if (clips.empty())
 	{
 		clips.push_front(clip);
@@ -92,11 +95,7 @@ void ClipsCollection::AddFront(std::shared_ptr<Clip> clip)
 		if (!clip->Equals(clips.front()))
 		{
 			clips.push_front(clip);
-			while (clips.size() > maxSize)
-			{
-				clips.back()->MarkForDelete();
-				RemoveBack();
-			}
+			TrimToMaxSize();
 		}
 		else
 		{
@@ -105,16 +104,9 @@ void ClipsCollection::AddFront(std::shared_ptr<Clip> clip)
 	}
 }
 
-void ClipsCollection::RemoveBack()
-{
-	if (!clips.empty())
-	{
-		clips.pop_back();
-	}
-}
-
 void ClipsCollection::RemoveAllOfFormat(DWORD format)
 {
+	std::lock_guard<std::mutex> lock(clipsMutex);
 	if (format != 0 && !clips.empty())
 	{
 		std::deque<std::shared_ptr<Clip>>::iterator it = clips.begin()++;
@@ -136,6 +128,7 @@ void ClipsCollection::RemoveAllOfFormat(DWORD format)
 
 std::shared_ptr<Clip> ClipsCollection::RemoveAt(unsigned int index)
 {
+	std::lock_guard<std::mutex> lock(clipsMutex);
 	std::shared_ptr<Clip> clip(nullptr);
 
 	if (!clips.empty() && index < clips.size())
@@ -149,6 +142,7 @@ std::shared_ptr<Clip> ClipsCollection::RemoveAt(unsigned int index)
 
 std::shared_ptr<Clip> ClipsCollection::At(size_t index)
 {
+	std::lock_guard<std::mutex> lock(clipsMutex);
 	std::shared_ptr<Clip> clip(nullptr);
 
 	if (!clips.empty() && index < clips.size())
@@ -161,35 +155,35 @@ std::shared_ptr<Clip> ClipsCollection::At(size_t index)
 
 std::shared_ptr<Clip> ClipsCollection::Front()
 {
-	return clips.front();
+	std::lock_guard<std::mutex> lock(clipsMutex);
+	return clips.empty() ? nullptr : clips.front();
 }
 
 unsigned int ClipsCollection::Size() noexcept
 {
+	std::lock_guard<std::mutex> lock(clipsMutex);
 	return static_cast<unsigned int>(clips.size());
 }
 
 unsigned int ClipsCollection::MaxSize() noexcept
 {
+	std::lock_guard<std::mutex> lock(clipsMutex);
 	return maxSize;
 }
 
 void ClipsCollection::SetMaxSize(unsigned int newMaxSize)
 {
+	std::lock_guard<std::mutex> lock(clipsMutex);
 	if (newMaxSize != maxSize && newMaxSize > 1)
 	{
 		maxSize = newMaxSize;
-
-		while (clips.size() > maxSize)
-		{
-			clips.back()->MarkForDelete();
-			RemoveBack();
-		}
+		TrimToMaxSize();
 	}
 }
 
 void ClipsCollection::Clear()
 {
+	std::lock_guard<std::mutex> lock(clipsMutex);
 	const size_t size = clips.size();
 	for (size_t i = 0; i < size; i++)
 	{
@@ -200,22 +194,37 @@ void ClipsCollection::Clear()
 
 void ClipsCollection::PurgeThumbnails()
 {
-	const size_t size = clips.size();
-	for (size_t i = 0; i < size; i++)
+	for (auto clip : Snapshot())
 	{
-		clips.at(i)->PurgeThumbnail();
+		clip->PurgeThumbnail();
 	}
 }
 
 void ClipsCollection::LoadAllResources()
 {
-	const size_t size = clips.size();
-	for (size_t i = 0; i < size; i++)
+	// Work on a copy: loading reads from disk and must not hold the lock.
+	for (auto clip : Snapshot())
 	{
-		if (clips.at(i)->ContainsFormat(CF_DIB))
+		if (clip->ContainsFormat(CF_DIB))
 		{
-			auto bitmap = clips.at(i)->EnsureBitmap();
-			clips.at(i)->GetThumbnail();
+			auto bitmap = clip->EnsureBitmap();
+			clip->GetThumbnail();
 		}
+	}
+}
+
+std::deque<std::shared_ptr<Clip>> ClipsCollection::Snapshot()
+{
+	std::lock_guard<std::mutex> lock(clipsMutex);
+	return clips;
+}
+
+// Caller must hold clipsMutex.
+void ClipsCollection::TrimToMaxSize()
+{
+	while (clips.size() > maxSize)
+	{
+		clips.back()->MarkForDelete();
+		clips.pop_back();
 	}
 }

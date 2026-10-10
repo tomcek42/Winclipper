@@ -1,5 +1,6 @@
 #pragma once
 #include <sstream>
+#include <mutex>
 #include "Clip.h"
 #include "ISerializable.h"
 class ClipsCollection : public ISerializable
@@ -12,7 +13,6 @@ public:
 	void									Deserialize(std::string serializationData) override;
 
 	void									AddFront(std::shared_ptr<Clip> clip);
-	void									RemoveBack();
 	void									RemoveAllOfFormat(DWORD format);
 	std::shared_ptr<Clip>					RemoveAt(unsigned int index);
 	std::shared_ptr<Clip>					At(size_t index);
@@ -25,7 +25,13 @@ public:
 	void									LoadAllResources();
 
 private:
+	// Guards clips and maxSize: the clips writer thread serializes the
+	// collection while the UI thread modifies it.
+	std::mutex								clipsMutex;
 	std::deque<std::shared_ptr<Clip>>		clips;
 	unsigned int							maxSize = 200;
+
+	std::deque<std::shared_ptr<Clip>>		Snapshot();
+	void									TrimToMaxSize();
 };
 
