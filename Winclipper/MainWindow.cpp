@@ -425,15 +425,16 @@ LRESULT MainWindow::WmMenuRButtonUp(HWND hWnd, WPARAM wParam, LPARAM lParam)
 
 	if (menuSelection == 1)
 	{
-		unsigned int index = LOWORD(wParam);
+		// wParam is the item position, which also counts non-clip items
+		// (More..., separators, Settings). Clip items carry the ID index + 1
+		// in both the top menu and the More... submenu, so use that.
+		const UINT itemId = GetMenuItemID(reinterpret_cast<HMENU>(lParam), static_cast<int>(wParam));
 
-		if (activePopupMenu != topPopupMenu)
+		if (itemId != static_cast<UINT>(-1) && itemId >= 1 && itemId <= cManager->GetSize())
 		{
-			index += UserSettings::MaxDisplayClips();
+			cManager->DeleteClipAt(itemId - 1);
+			PostMessageW(hWnd, WM_CANCELMODE, 0, 0);
 		}
-		cManager->DeleteClipAt(index);
-
-		PostMessageW(hWnd, WM_CANCELMODE, 0, 0);
 	}
 
 	return 0;

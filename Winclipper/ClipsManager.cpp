@@ -486,8 +486,11 @@ const unsigned int ClipsManager::GetSize() noexcept
 void ClipsManager::DeleteClipAt(unsigned int index)
 {
 	auto clip = clips.RemoveAt(index);
-	clip->MarkForDelete();
-	SaveClipsAsync();
+	if (clip != nullptr)
+	{
+		clip->MarkForDelete();
+		SaveClipsAsync();
+	}
 }
 
 std::shared_ptr<Clip> ClipsManager::GetClipAt(unsigned int index)
