@@ -2,6 +2,7 @@
 // Reads and writes settings to and from
 // the current users's AppData folder
 // and makes them available to read or change
+#include <atomic>
 #include "Notify.h"
 #include "resource.h"
 #include "Shlobj.h"
@@ -56,11 +57,11 @@ private:
 	static bool				saveImages;
 	static unsigned int		maxCacheMegabytes;
 
-	static int				settingWriterWaitCount;
-	static bool				isWriterFinished;
+	static std::atomic<int>	settingWriterWaitCount;
+	static std::atomic<bool>	isWriterFinished;
 
     static void				SaveSettingsAsync();
-    static void				DelaySettingWriter(int* waitCount);
+    static void				DelaySettingWriter(std::atomic<int>* waitCount);
     static void				WriteSettings();
 
 protected:

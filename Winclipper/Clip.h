@@ -1,5 +1,7 @@
 #pragma once
+#include <atomic>
 #include <codecvt>
+#include <mutex>
 #include <wincodec.h>
 #include "Bitmap.h"
 #include "OnDemandBitmapManager.h"
@@ -50,14 +52,15 @@ private:
 	std::string					bitmapGuid;
 	unsigned int				bitmapHeight = 0;
 	unsigned int				bitmapWidth = 0;
-	std::weak_ptr<Bitmap>		pBitmap;
+	std::weak_ptr<Bitmap>		pBitmap;		// guarded by bitmapMutex
+	std::mutex					bitmapMutex;
 	HBITMAP						thumbnail = nullptr;
 
 	std::wstring				unicodeText;
 	std::wstring				menuTextCache;
 	size_t						lastKnownMenuTextLength = 0;
 
-	bool						inCriticalSection = false;
+	std::atomic<bool>			isLoadingBitmap{ false };
 	bool						shouldDelete = false;
 
 	std::string					GetBase64FromWString(const std::wstring data);

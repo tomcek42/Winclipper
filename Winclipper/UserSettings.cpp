@@ -12,8 +12,8 @@ bool UserSettings::showPreview;
 bool UserSettings::pasteOnClick;
 bool UserSettings::saveImages;
 unsigned int UserSettings::maxCacheMegabytes;
-int	UserSettings::settingWriterWaitCount = 0;
-bool UserSettings::isWriterFinished = true;
+std::atomic<int> UserSettings::settingWriterWaitCount{ 0 };
+std::atomic<bool> UserSettings::isWriterFinished{ true };
 
 // stous - string to unsigned short
 // NOTE: May move to static utility class in future
@@ -488,21 +488,20 @@ void UserSettings::Deserialize(std::vector<std::wstring> srData)
 // Schedules a write operation to the settings file.
 void UserSettings::SaveSettingsAsync()
 {
-    if (settingWriterWaitCount == 0)
+    // Only the caller that raises the count from 0 starts the writer.
+    if (settingWriterWaitCount++ == 0)
     {
-        settingWriterWaitCount++;
-        std::thread([&]() {DelaySettingWriter(&settingWriterWaitCount); }).detach();
-    }
-    else
-    {
-        settingWriterWaitCount++;
+        // Mark pending before the thread starts so NoPendingSettingWrites
+        // cannot report idle between the count reaching 0 and WriteSettings.
+        isWriterFinished = false;
+        std::thread([]() { DelaySettingWriter(&settingWriterWaitCount); }).detach();
     }
 }
 
 // Sets the value pointed to by waitCount to 1, sleeps for an
 // amount of time, decrements the value by 1, and repeats if it does
 // not have a value of zero. If it does, it writes the settings file to disk.
-void UserSettings::DelaySettingWriter(int* waitCount)
+void UserSettings::DelaySettingWriter(std::atomic<int>* waitCount)
 {
     while (*waitCount != 0)
     {

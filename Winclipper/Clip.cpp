@@ -201,34 +201,44 @@ void Clip::SetDibBitmap(std::shared_ptr<BITMAPINFOHEADER> pBmiHeader, std::vecto
 
 	bitmapGuid = OnDemandBitmapManager::Add(bitmap);
 	thumbnail = OnDemandBitmapManager::CreateAndSaveThumbnail(bitmapGuid, bitmap);
-	pBitmap = OnDemandBitmapManager::Get(bitmapGuid);
+	auto weak = OnDemandBitmapManager::Get(bitmapGuid);
+	std::lock_guard<std::mutex> lock(bitmapMutex);
+	pBitmap = weak;
 }
 
 bool Clip::BitmapReady() noexcept
 {
-	if (!inCriticalSection)
+	if (isLoadingBitmap)
 	{
-		std::shared_ptr<Bitmap> p = pBitmap.lock();
-		return !p ? false : true;
+		return false;
 	}
-	return false;
+	std::lock_guard<std::mutex> lock(bitmapMutex);
+	return !pBitmap.expired();
 }
 
 std::shared_ptr<Bitmap> Clip::EnsureBitmap()
 {
-	std::shared_ptr<Bitmap> p = pBitmap.lock();
+	std::shared_ptr<Bitmap> p;
+	{
+		std::lock_guard<std::mutex> lock(bitmapMutex);
+		p = pBitmap.lock();
+	}
 	if (!p)
 	{
+		// Load outside the lock: Get may read and parse a file from disk.
+		std::weak_ptr<Bitmap> weak;
 		try
 		{
-			pBitmap = OnDemandBitmapManager::Get(bitmapGuid);
+			weak = OnDemandBitmapManager::Get(bitmapGuid);
 		}
 		catch (const std::exception& e)
 		{
 			MarkForDelete();
 			throw e;
 		}
-		p = pBitmap.lock();
+		p = weak.lock();
+		std::lock_guard<std::mutex> lock(bitmapMutex);
+		pBitmap = weak;
 	}
 	OnDemandBitmapManager::UpdateUsage(bitmapGuid);
 	return p;
@@ -395,17 +405,19 @@ std::wstring Clip::GetWStringFromBase64(const std::string base64)
 
 void Clip::EnsureBitmapAsyncInternal(Clip * clip)
 {
-	if (!clip->inCriticalSection)
+	// exchange makes test-and-set atomic: only one loader per clip.
+	if (!clip->isLoadingBitmap.exchange(true))
 	{
-		clip->inCriticalSection = true;
 		try
 		{
-			clip->pBitmap = OnDemandBitmapManager::Get(clip->bitmapGuid);
+			auto weak = OnDemandBitmapManager::Get(clip->bitmapGuid);
+			std::lock_guard<std::mutex> lock(clip->bitmapMutex);
+			clip->pBitmap = weak;
 		}
 		catch (const std::exception&)
 		{
 			clip->MarkForDelete();
 		}
-		clip->inCriticalSection = false;
+		clip->isLoadingBitmap = false;
 	}
 }
