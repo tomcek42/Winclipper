@@ -8,7 +8,7 @@
 #include "base64.h"
 #include "ISerializable.h"
 
-class Clip : public ISerializable
+class Clip : public ISerializable, public std::enable_shared_from_this<Clip>
 {
 public:
 	Clip() noexcept;
@@ -66,5 +66,5 @@ private:
 	std::string					GetBase64FromWString(const std::wstring data);
 	std::wstring				GetWStringFromBase64(const std::string base64);
 
-	static void					EnsureBitmapAsyncInternal(Clip * clip);
+	static void					EnsureBitmapAsyncInternal(std::shared_ptr<Clip> clip);
 };

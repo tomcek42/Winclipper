@@ -246,7 +246,10 @@ std::shared_ptr<Bitmap> Clip::EnsureBitmap()
 
 void Clip::EnsureBitmapAsync()
 {
-	std::thread(EnsureBitmapAsyncInternal, this).detach();
+	// The detached thread owns a reference so the clip outlives it even if
+	// it is removed from the collection meanwhile. Clips are always created
+	// via make_shared.
+	std::thread(EnsureBitmapAsyncInternal, shared_from_this()).detach();
 }
 
 const std::shared_ptr<BITMAPINFOHEADER> Clip::DibBitmapInfoHeader()
@@ -403,7 +406,7 @@ std::wstring Clip::GetWStringFromBase64(const std::string base64)
 	return converter.from_bytes(base64_decode(base64));
 }
 
-void Clip::EnsureBitmapAsyncInternal(Clip * clip)
+void Clip::EnsureBitmapAsyncInternal(std::shared_ptr<Clip> clip)
 {
 	// exchange makes test-and-set atomic: only one loader per clip.
 	if (!clip->isLoadingBitmap.exchange(true))
