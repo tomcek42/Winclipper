@@ -63,13 +63,10 @@ bool File::Exists(const wchar_t *name) noexcept
     return false;
 }
 
+// Returns true if the file was deleted.
 bool File::Delete(const wchar_t * name) noexcept
 {
-    if (DeleteFileW(name) == 0)
-    {
-        return true;
-    }
-    return false;
+    return DeleteFileW(name) != 0;
 }
 
 void File::DeleteDir(std::wstring dirName)
