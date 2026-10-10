@@ -1,7 +1,7 @@
 # Winclipper — Security-Review & Backlog
 
 Stand: 2026-10-10. Fork `tomcek42/Winclipper`, upstream `Carson-Shook/Winclipper` (keine Merges mehr geplant).
-Status: Persistenzschicht gehärtet, Auto-Updater entfernt (F1, F3–F8 behoben). Offen: F2, ungeprüfte Bereiche unten.
+Status: Persistenzschicht gehärtet, Auto-Updater entfernt (F1, F3–F9 behoben). Offen: F2, ungeprüfte Bereiche unten.
 
 | Befund | Status | Commit |
 |---|---|---|
@@ -13,6 +13,7 @@ Status: Persistenzschicht gehärtet, Auto-Updater entfernt (F1, F3–F8 behoben)
 | F6 `JoinPath` leerer String | behoben | `25f005a` |
 | F7 Absturz bei ungültiger `settings.dat` | behoben | `834a6ca` |
 | F8 Fremder Auto-Updater ohne Signaturprüfung | behoben | `69637f4`, `c1bbfb3` |
+| F9 Ungeprüfte DIB-Daten aus der Zwischenablage | behoben | `2191642` |
 
 ## Build-Setup (verifiziert)
 
@@ -104,13 +105,24 @@ Offen (Folgepunkt): Installer verwendet weiter `UpgradeCode` und `Manufacturer` 
 gleicher oder höherer Version ersetzt den Fork per `MajorUpgrade`. Eigener `UpgradeCode` wäre sauberer, ist
 aber eine Produktentscheidung.
 
+### F9 — Ungeprüfte DIB-Daten aus der Zwischenablage (`Winclipper/ClipsManager.cpp`, `AddToClips`) — schwerwiegend
+Jeder Prozess der Sitzung kann beliebige Bytes als `CF_DIB` in die Zwischenablage legen; Winclipper übernimmt sie
+automatisch. Der Header wurde nicht gegen `GlobalSize` geprüft: `biSizeImage`/`biClrUsed` steuerten ein `memcpy`
+über das Blockende hinaus (Heap-Over-Read), bei Bildgröße 0 lief die Alpha-Schleife bis `0xFFFFFFFF`
+(Heap-Overflow beim Schreiben), negative Breiten und große Maße ließen die Größenberechnung überlaufen. Fix:
+`CopyClipboardDib` prüft jedes Feld gegen die Blockgröße mit denselben Regeln wie `Bitmap::Deserialize`, speichert
+nur einen `BITMAPINFOHEADER` (Masken aus V4/V5-Headern werden übernommen) und fängt `bad_alloc` ab.
+
+Offen (Folgepunkt): Der `CF_UNICODETEXT`-Pfad liest den Text per `GlobalLock` ohne Längengrenze; fehlt die
+NUL-Terminierung, liest er über den Block hinaus.
+
 ## Noch nicht geprueft
 
 - `MainWindow.cpp` / Fensternachrichten-Handling
-- Zwischenablage-Erfassung selbst (Formate, Ownership, Groessenlimits)
+- Zwischenablage-Erfassung: Textpfad (siehe F9), Ownership
 - `RegistryUtilities.cpp` (Autostart)
 
 ## Nächste Schritte
 
-1. Update-Mechanismus (`SSUPConfig.xml`) prüfen — hohe Priorität.
+1. F9-Folgepunkt: `CF_UNICODETEXT` auf `GlobalSize` begrenzen.
 2. F2 (DPAPI) nach Designentscheidung.
