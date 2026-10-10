@@ -1,7 +1,7 @@
 # Winclipper — Security-Review & Backlog
 
 Stand: 2026-10-10. Fork `tomcek42/Winclipper`, upstream `Carson-Shook/Winclipper` (keine Merges mehr geplant).
-Status: Persistenzschicht gehärtet, Auto-Updater entfernt (F1, F3–F10 behoben). Offen: F2, ungeprüfte Bereiche unten.
+Status: Persistenzschicht gehärtet, Auto-Updater entfernt (F1, F3–F11 behoben). Offen: F2, ungeprüfte Bereiche unten.
 
 | Befund | Status | Commit |
 |---|---|---|
@@ -15,6 +15,7 @@ Status: Persistenzschicht gehärtet, Auto-Updater entfernt (F1, F3–F10 behoben
 | F8 Fremder Auto-Updater ohne Signaturprüfung | behoben | `69637f4`, `c1bbfb3` |
 | F9 Ungeprüfte DIB-Daten aus der Zwischenablage | behoben | `2191642` |
 | F10 Unbegrenztes Lesen von `CF_UNICODETEXT` | behoben | `2bc2715` |
+| F11 Rechtsklick-Löschen über Menüposition | behoben | `1db2b39` |
 
 ## Build-Setup (verifiziert)
 
@@ -119,9 +120,20 @@ Der Text wurde bis zur ersten NUL gelesen. Ein Prozess kann unterminierten Text 
 las Winclipper über das Ende des Blocks hinaus (Over-Read, Absturz oder Fremddaten im Clip). Fix: Länge per
 `wcsnlen` auf `GlobalSize / sizeof(wchar_t)` begrenzt.
 
+### F11 — Rechtsklick-Löschen über Menüposition (`Winclipper/MainWindow.cpp`, `WmMenuRButtonUp`) — mittel
+`WM_MENURBUTTONUP` liefert die Position des Eintrags, nicht seine ID. Die Position zählt auch „More...“,
+Trennlinien, „Clear Clips“ und „Settings“ mit. „Delete“ auf einem solchen Eintrag löschte einen fremden Clip
+oder dereferenzierte das `nullptr` aus `RemoveAt` (Absturz, z. B. bei leerer Liste). Fix: Die Item-ID
+(Clip-Index + 1) wird per `GetMenuItemID` gelesen und gegen die Listengröße geprüft; `DeleteClipAt` prüft auf `nullptr`.
+
+Rest von `MainWindow.cpp` geprüft, ohne weiteren Sicherheitsbefund. `WM_COMMAND` (z. B. `IDM_EXIT`) kann jeder
+Prozess gleicher Integritätsstufe an das versteckte Fenster senden. Das liegt im Angreifermodell ohnehin vor
+(gleicher Benutzer), UIPI blockt niedrigere Stufen. Nebenbefund, funktional: `DeleteNotificationIcon` setzt
+kein `hWnd`, und `AddNotificationIcon` belegt `uID` mit dem HRESULT von `LoadIconMetric`, sodass das Entfernen
+des Tray-Icons beim Beenden fehlschlägt.
+
 ## Noch nicht geprueft
 
-- `MainWindow.cpp` / Fensternachrichten-Handling
 - Zwischenablage-Erfassung: Ownership
 - `RegistryUtilities.cpp` (Autostart)
 
