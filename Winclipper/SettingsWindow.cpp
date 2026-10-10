@@ -471,21 +471,27 @@ LRESULT SettingsWindow::WmClose(HWND hWnd)
 // Writes the "run at startup" registry key for Winclipper
 bool SettingsWindow::WriteRegistryRun()
 {
-	HKEY hOpened;
 	wchar_t pPath[MAX_PATH];
-
-	GetModuleFileNameW(nullptr, pPath, MAX_PATH);
-
-	//OpenRegistryRun(hOpened);
-	RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_ALL_ACCESS, &hOpened);
-
-	if (RegSetValueExW(hOpened, L"Winclipper", 0, REG_SZ, (LPBYTE)pPath, sizeof(pPath)) != ERROR_SUCCESS)
+	const DWORD pathLength = GetModuleFileNameW(nullptr, pPath, MAX_PATH);
+	if (pathLength == 0 || pathLength >= MAX_PATH)
 	{
 		return false;
 	}
 
+	// Quote the path: the Run key is parsed like a command line, and an
+	// unquoted "C:\Program Files\..." would first try "C:\Program.exe".
+	const std::wstring command = L"\"" + std::wstring(pPath, pathLength) + L"\"";
+
+	HKEY hOpened;
+	if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_SET_VALUE, &hOpened) !=ERROR_SUCCESS)
+	{
+		return false;
+	}
+
+	const LSTATUS status = RegSetValueExW(hOpened, L"Winclipper", 0, REG_SZ,
+		reinterpret_cast<const BYTE *>(command.c_str()), static_cast<DWORD>((command.length() + 1) * sizeof(wchar_t)));
 	RegCloseKey(hOpened);
-	return true;
+	return status == ERROR_SUCCESS;
 }
 
 // Deletes the "run at startup" registry key for Winclipper
@@ -493,7 +499,7 @@ bool SettingsWindow::DeleteRegistryRun()
 {
 	HKEY hOpened;
 
-	if (RegOpenKeyEx(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_ALL_ACCESS, &hOpened) == ERROR_SUCCESS)
+	if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_SET_VALUE, &hOpened) == ERROR_SUCCESS)
 	{
 		RegDeleteValueW(hOpened, L"Winclipper");
 	}
@@ -663,15 +669,15 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	SetDlgItemInt(hWnd, TXT_MAX_IMG_CACHE_MB, UserSettings::MaxCacheMegabytes(), false);
 
 	HKEY hOpened;
-	if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_ALL_ACCESS, &hOpened) == ERROR_SUCCESS)
+	if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Run", 0, KEY_QUERY_VALUE, &hOpened) == ERROR_SUCCESS)
 	{
 		if (RegistryUtilities::QueryKeyForValue(hOpened, L"Winclipper") == true)
 		{
 			CheckboxRunAtStartup.SetValue(true);
 			//CheckDlgButton(hWnd, CHK_RUN_AT_STARTUP, BST_CHECKED);
 		}
+		RegCloseKey(hOpened);
 	}
-	RegCloseKey(hOpened);
 	CheckboxSaveToDisk.SetValue(UserSettings::SaveToDisk());
 	CheckboxSelectSecondClip.SetValue(UserSettings::Select2ndClip());
 	CheckboxShowPreview.SetValue(UserSettings::ShowPreview());

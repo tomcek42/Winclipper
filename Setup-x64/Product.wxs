@@ -50,7 +50,7 @@
       <Component Id="RegistryEntries" Guid="94F2A810-E24E-429A-8886-A15F5A9B1897">
           <RegistryKey Root="HKCU"
                        Key="Software\Microsoft\Windows\CurrentVersion\Run">
-              <RegistryValue Type="string" Name="Winclipper" Value="[#Winclipper.exe]" />
+              <RegistryValue Type="string" Name="Winclipper" Value="&quot;[#Winclipper.exe]&quot;" />
           </RegistryKey>
       </Component>
     </DirectoryRef>
