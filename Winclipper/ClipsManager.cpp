@@ -313,7 +313,10 @@ bool ClipsManager::AddToClips(HWND hWnd)
 			const wchar_t * data = static_cast<wchar_t*>(GlobalLock(psClipboardData));
 			if (data != nullptr)
 			{
-				clip->SetUnicodeText(data);
+				// The data comes from any process; it need not be terminated
+				// within its block, so never read past GlobalSize.
+				const size_t maxChars = GlobalSize(psClipboardData) / sizeof(wchar_t);
+				clip->SetUnicodeText(std::wstring(data, wcsnlen(data, maxChars)));
 				GlobalUnlock(psClipboardData);
 				clip->AddFormat(CF_UNICODETEXT);
 			}
