@@ -16,6 +16,16 @@ std::wstring File::GetDirName(const std::wstring& fname)
 
 std::wstring File::JoinPath(const std::wstring & path1, const std::wstring & path2)
 {
+	// back()/front() on an empty string is undefined behavior.
+	if (path1.empty())
+	{
+		return path2;
+	}
+	if (path2.empty())
+	{
+		return path1;
+	}
+
 	auto retVal = path1;
 	auto retVal2 = path2;
 	if (retVal.back() != DIR_SEP)
