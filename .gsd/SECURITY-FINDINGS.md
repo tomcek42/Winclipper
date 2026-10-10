@@ -6,7 +6,7 @@ Status: Alle Befunde F1–F14 behoben, alle geplanten Bereiche geprüft. Clips u
 | Befund | Status | Commit |
 |---|---|---|
 | F1 Heap-Over-Read Bitmap | behoben | `ac6d8aa` |
-| F2 Klartext-Clips | behoben | `b8287b9`, `b1b006b` |
+| F2 Klartext-Clips | behoben | `b8287b9`, `b1b006b`, `aeff89c` |
 | F3 `File::Delete` invertiert | behoben | `3daeee5` |
 | F4 `DeleteDir` NUL-Terminierung | behoben | `297178c` |
 | F5 Datenrennen | behoben | `29064a4`, `89881b4`, `7139a8a`, `bf88a47` |
@@ -175,6 +175,14 @@ gesetzt und die nächste echte Kopie wird verschluckt (funktional, gering).
 
 ## Nächste Schritte
 
-1. Laufzeittest der Migration: alte Klartext-`clips.dat` mit Bildern → Start → Dateien beginnen mit `WCDPAPI1`,
-   keine `-thumb`-Dateien mehr.
-2. Installer bauen (WiX-Toolset fehlt hier) und Upgrade von einer Upstream-Installation prüfen.
+1. Upgrade von einer Upstream-Installation auf das Fork-MSI testen (braucht Adminrechte).
+
+## Laufzeittests (2026-10-10)
+
+- Migration (x64 Release): Klartext-`clips.dat` mit Text- und Bildclips plus verwaisten Upstream-Bildern und
+  `-thumb`-Dateien. Erster Test fand eine Lücke: Bilddateien wurden erst beim Laden verschlüsselt, verwaiste nie.
+  Behoben mit `aeff89c` (`OnDemandBitmapManager::ProtectDiskCache` beim Start). Danach beginnen alle Dateien mit
+  `WCDPAPI1`, keine `-thumb`-Dateien, alte Clips bleiben erhalten, neue Text-/Bildkopien landen verschlüsselt.
+  Grenze: Überschreiben an Ort und Stelle löscht alte Klartextblöcke auf der Platte nicht sicher.
+- Installer: Beide MSIs mit `candle`/`light` aus dem WiX-3.11-NuGet-Paket gebaut. Upgrade-Tabelle geprüft:
+  eigener `UpgradeCode`, Upstream-Code (x64 `34e3392e…`, x86 `a332e06b…`) wird entfernt, Run-Wert in Anführungszeichen.
