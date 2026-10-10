@@ -29,10 +29,6 @@
       <Feature Id="VCRedist" Title="Visual C++ 14 Runtime" AllowAdvertise="no" Display="hidden" Level="1">
         <MergeRef Id="VCRedist"/>
       </Feature>
-      <Feature Id="SSUP" Title="ApplicationUpdater" AllowAdvertise="no" Display="hidden" Level="1">
-        <MergeRef Id="SSUP"/>
-        <ComponentRef Id="SSUPConfig"/>
-      </Feature>
       <ComponentRef Id="Winclipper.exe" />
       <ComponentRef Id="license"/>
       <ComponentRef Id="readme"/>
@@ -60,10 +56,6 @@
     </DirectoryRef>
   
 		<DirectoryRef Id="APPLICATIONROOTDIRECTORY">
-      <Merge Id="SSUP" SourceFile="SSUP_merge_x86.msm" DiskId="1" Language="0"/>
-      <Component Id="SSUPConfig" Guid="07C4054F-38CB-4F4B-9028-F0E9F254A05D">
-        <File Id="SSUPConfig" Source="SSUPConfig.xml" KeyPath="yes"/>
-      </Component>
 			<Component Id="Winclipper.exe" Guid="D59FE155-8940-4EA5-A130-AB7CEBCB527A">
         <File Id="Winclipper.exe" Source="$(var.Winclipper.TargetPath)" KeyPath="yes" Checksum="yes"/>
       </Component>
