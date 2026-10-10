@@ -1,12 +1,12 @@
 # Winclipper — Security-Review & Backlog
 
 Stand: 2026-10-10. Fork `tomcek42/Winclipper`, upstream `Carson-Shook/Winclipper` (keine Merges mehr geplant).
-Status: Persistenzschicht gehärtet, Auto-Updater entfernt (F1, F3–F14 behoben). Alle geplanten Bereiche geprüft. Offen: F2, Tray-Icon (funktional).
+Status: Alle Befunde F1–F14 behoben, alle geplanten Bereiche geprüft. Clips und Bild-Cache sind DPAPI-verschlüsselt.
 
 | Befund | Status | Commit |
 |---|---|---|
 | F1 Heap-Over-Read Bitmap | behoben | `ac6d8aa` |
-| F2 Klartext-Clips | offen (Designentscheidung, M002) | — |
+| F2 Klartext-Clips | behoben | `b8287b9`, `b1b006b` |
 | F3 `File::Delete` invertiert | behoben | `3daeee5` |
 | F4 `DeleteDir` NUL-Terminierung | behoben | `297178c` |
 | F5 Datenrennen | behoben | `29064a4`, `89881b4`, `7139a8a`, `bf88a47` |
@@ -61,6 +61,15 @@ Vorschlag: `CryptProtectData` (DPAPI, benutzergebunden, keine Schluesselverwaltu
 Zwischenablage-Formate `ExcludeClipboardContentFromMonitorProcessing` und `Clipboard Viewer Ignore`,
 die Passwort-Manager setzen — Winclipper ignoriert beide derzeit. Designaenderung, kein Patch.
 
+Behoben: `clips.dat` und `BitmapCache\` werden per `File::WriteProtected` mit `CryptProtectData` (Benutzerschlüssel,
+feste Zusatz-Entropie, Kennung `WCDPAPI1`) geschrieben. Klartextdateien älterer Versionen werden einmal gelesen und
+sofort verschlüsselt neu geschrieben. Die `-thumb`-BMPs (unverschlüsselte Kopie jedes Bildes) entfallen; Vorschauen
+entstehen nur noch im Speicher, Altdateien werden gelöscht. Die Ausschlussformate sind seit F14 berücksichtigt.
+Grenzen: DPAPI schützt gegen Offline-Zugriff (gestohlene Platte, Backup, anderer Benutzer), nicht gegen Code, der
+als derselbe Benutzer läuft — der kann `CryptUnprotectData` selbst aufrufen. Eine wirksame Alternative ohne
+Passwortabfrage gibt es dafür nicht; maximaler Schutz ist „Save clips to disk“ aus. `settings.dat` bleibt
+unverschlüsselt (keine Inhalte).
+
 ### F3 — `File::Delete` gibt bei Erfolg `false` zurueck (`Winclipper/File.cpp:66-72`)
 ```cpp
 if (DeleteFileW(name) == 0) { return true; }   // 0 = FEHLER bei DeleteFileW
@@ -106,9 +115,9 @@ Kompromittierung), bestimmt die angebotene MSI; die Installation läuft per-mach
 gehärteten Fork-Builds durch Upstream-MSIs ersetzen. Fix: Aufruf entfernt, Merge-Modul und `SSUPConfig.xml` aus
 beiden Installern entfernt. Der Fork hat keinen Update-Kanal.
 
-Offen (Folgepunkt): Installer verwendet weiter `UpgradeCode` und `Manufacturer` von Upstream. Eine Upstream-MSI
-gleicher oder höherer Version ersetzt den Fork per `MajorUpgrade`. Eigener `UpgradeCode` wäre sauberer, ist
-aber eine Produktentscheidung.
+Folgepunkt behoben (`61687cd`): Beide Installer haben einen eigenen `UpgradeCode`, damit keine Upstream-MSI den Fork
+per `MajorUpgrade` ersetzt. Die Upstream-Codes werden per `<Upgrade>` erkannt und Upstream-Installationen jeder
+Version entfernt, damit nicht beide nebeneinander liegen. `Manufacturer` bleibt unverändert.
 
 ### F9 — Ungeprüfte DIB-Daten aus der Zwischenablage (`Winclipper/ClipsManager.cpp`, `AddToClips`) — schwerwiegend
 Jeder Prozess der Sitzung kann beliebige Bytes als `CF_DIB` in die Zwischenablage legen; Winclipper übernimmt sie
@@ -133,7 +142,7 @@ Rest von `MainWindow.cpp` geprüft, ohne weiteren Sicherheitsbefund. `WM_COMMAND
 Prozess gleicher Integritätsstufe an das versteckte Fenster senden. Das liegt im Angreifermodell ohnehin vor
 (gleicher Benutzer), UIPI blockt niedrigere Stufen. Nebenbefund, funktional: `DeleteNotificationIcon` setzt
 kein `hWnd`, und `AddNotificationIcon` belegt `uID` mit dem HRESULT von `LoadIconMetric`, sodass das Entfernen
-des Tray-Icons beim Beenden fehlschlägt.
+des Tray-Icons beim Beenden fehlschlägt. Behoben in `55397f8`.
 
 ### F12 — Stack-Overflow beim Lesen von Registry-Werten (`Winclipper/RegistryUtilities.cpp`) — schwerwiegend
 `AppsUseLightTheme`, `ClipboardHistoryEnabled` und `ClipboardStartupWarningDisabled` übergaben `RegQueryValueExW`
@@ -166,6 +175,6 @@ gesetzt und die nächste echte Kopie wird verschluckt (funktional, gering).
 
 ## Nächste Schritte
 
-1. F2 (DPAPI) nach Designentscheidung.
-2. Tray-Icon beim Beenden entfernen (funktional, siehe F11).
-3. Eigener `UpgradeCode` für den Installer (Produktentscheidung, siehe F8).
+1. Laufzeittest der Migration: alte Klartext-`clips.dat` mit Bildern → Start → Dateien beginnen mit `WCDPAPI1`,
+   keine `-thumb`-Dateien mehr.
+2. Installer bauen (WiX-Toolset fehlt hier) und Upgrade von einer Upstream-Installation prüfen.

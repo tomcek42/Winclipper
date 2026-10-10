@@ -46,8 +46,12 @@ für Größenberechnungen oder Allokationen benutzt wird. Insbesondere: keine un
 Subtraktion zweier Dateifelder ohne vorherige Ordnungsprüfung, und Rückgabewerte von
 `read`/`readsome` immer auswerten.
 
-Clip-Inhalte sind derzeit nur base64-kodiert, also im Klartext. Neue Persistenz nicht ohne
-`CryptProtectData` (DPAPI) ergänzen.
+Clip-Inhalte (`clips.dat`, `BitmapCache\`) werden über `File::WriteProtected`/`ReadProtected` mit DPAPI
+verschlüsselt. Neue Persistenz von Clip-Inhalten nur darüber, nie mit `File::Write`. Vorschaubilder bewusst
+nicht auf die Platte schreiben (F2).
+
+Der Installer hat einen eigenen `UpgradeCode` und entfernt Upstream-Installationen per `<Upgrade>` auf die alten
+Codes. Den Upstream-Code nicht zurückholen.
 
 ## Arbeitsweise in diesem Repo
 
