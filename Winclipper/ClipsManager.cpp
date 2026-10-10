@@ -192,6 +192,110 @@ void ClipsManager::ClearClips()
     SaveClipsAsync();
 }
 
+// Copies a CF_DIB block from the clipboard. Any process can put arbitrary
+// bytes there, so every header field is checked against the block size
+// before it is used for an allocation or a copy.
+static bool CopyClipboardDib(const BYTE * data, SIZE_T available, bool forceOpaque,
+	std::shared_ptr<BITMAPINFOHEADER> & header, std::vector<RGBQUAD> & quads, std::shared_ptr<BYTE> & bits)
+{
+	if (available < sizeof(BITMAPINFOHEADER))
+	{
+		return false;
+	}
+
+	BITMAPINFOHEADER bmih;
+	memcpy(&bmih, data, sizeof(bmih));
+
+	const WORD bitCount = bmih.biBitCount;
+	// See: https://docs.microsoft.com/en-us/windows/desktop/api/d2d1/nf-d2d1-id2d1rendertarget-getmaximumbitmapsize
+	if (bmih.biSize < sizeof(BITMAPINFOHEADER)
+		|| bmih.biSize > available
+		|| bmih.biWidth <= 0
+		|| bmih.biWidth >= 16384
+		|| bmih.biHeight == 0
+		|| bmih.biHeight >= 16384
+		|| bmih.biHeight <= -16384
+		|| bmih.biPlanes != 1
+		|| (bitCount != 1 && bitCount != 4 && bitCount != 8
+			&& bitCount != 16 && bitCount != 24 && bitCount != 32)
+		|| (bmih.biCompression != BI_RGB && bmih.biCompression != BI_BITFIELDS))
+	{
+		return false;
+	}
+
+	SIZE_T offset = bmih.biSize;
+
+	if (bmih.biCompression == BI_BITFIELDS && bmih.biSize > sizeof(BITMAPINFOHEADER))
+	{
+		// V4/V5 headers carry the three masks inside the header; only a
+		// plain BITMAPINFOHEADER is stored, so move them behind it.
+		if (bmih.biSize < sizeof(BITMAPINFOHEADER) + 3 * sizeof(RGBQUAD))
+		{
+			return false;
+		}
+		quads.resize(3);
+		memcpy(quads.data(), data + sizeof(BITMAPINFOHEADER), 3 * sizeof(RGBQUAD));
+	}
+	else
+	{
+		unsigned int colorBytes = bmih.biClrUsed;
+		if (!colorBytes)
+		{
+			if (bitCount <= 8)
+			{
+				colorBytes = 1u << bitCount;
+			}
+			else if (bmih.biCompression == BI_BITFIELDS)
+			{
+				colorBytes = 3;
+			}
+		}
+		const unsigned int maxColors = bitCount <= 8 ? (1u << bitCount) : 256u;
+		if (colorBytes > maxColors || colorBytes * sizeof(RGBQUAD) > available - offset)
+		{
+			return false;
+		}
+		quads.resize(colorBytes);
+		if (colorBytes > 0)
+		{
+			memcpy(quads.data(), data + offset, colorBytes * sizeof(RGBQUAD));
+			offset += colorBytes * sizeof(RGBQUAD);
+		}
+	}
+
+	// Only the size the header implies is needed; a larger biSizeImage
+	// is ignored rather than trusted.
+	const unsigned long long size = Bitmap::ComputeImageSize(bmih);
+	if (size == 0 || size > available - offset)
+	{
+		return false;
+	}
+
+	bmih.biSize = sizeof(BITMAPINFOHEADER);
+	bmih.biSizeImage = static_cast<DWORD>(size);
+
+	try
+	{
+		bits = std::shared_ptr<BYTE>(new BYTE[static_cast<size_t>(size)], array_deleter<BYTE>());
+	}
+	catch (const std::bad_alloc&)
+	{
+		return false;
+	}
+	memcpy(bits.get(), data + offset, static_cast<size_t>(size));
+
+	if (bitCount == 32 && forceOpaque)
+	{
+		for (unsigned long long i = 3; i < size; i += 4)
+		{
+			bits.get()[i] = 255;
+		}
+	}
+
+	header = std::make_shared<BITMAPINFOHEADER>(bmih);
+	return true;
+}
+
 bool ClipsManager::AddToClips(HWND hWnd)
 {
     if (!OpenClipboard(hWnd))
@@ -241,57 +345,14 @@ bool ClipsManager::AddToClips(HWND hWnd)
 
 		if (psClipboardData != nullptr)
 		{
-			const BITMAPINFO * tempBitmapInfo = static_cast<BITMAPINFO *>(GlobalLock(psClipboardData));
+			const BYTE * dibData = static_cast<const BYTE *>(GlobalLock(psClipboardData));
 
-			// See: https://docs.microsoft.com/en-us/windows/desktop/api/d2d1/nf-d2d1-id2d1rendertarget-getmaximumbitmapsize
-			if (tempBitmapInfo != nullptr && tempBitmapInfo->bmiHeader.biHeight < 16384 && tempBitmapInfo->bmiHeader.biWidth < 16384)
+			std::shared_ptr<BITMAPINFOHEADER> bitmapInfoHeader;
+			std::vector<RGBQUAD> quads;
+			std::shared_ptr<BYTE> pMyBits;
+
+			if (dibData != nullptr && CopyClipboardDib(dibData, GlobalSize(psClipboardData), !hasTransparentBitmapFormat, bitmapInfoHeader, quads, pMyBits))
 			{
-				unsigned int colorBytes = tempBitmapInfo->bmiHeader.biClrUsed;
-				if (!colorBytes)
-				{
-					if (tempBitmapInfo->bmiHeader.biBitCount <= 8)
-					{
-						colorBytes = 1 << tempBitmapInfo->bmiHeader.biBitCount;
-					}
-					else if (tempBitmapInfo->bmiHeader.biBitCount != 24 && tempBitmapInfo->bmiHeader.biCompression == BI_BITFIELDS)
-					{
-						colorBytes = 3;
-					}
-				}
-
-				const size_t offset = tempBitmapInfo->bmiHeader.biSize + (colorBytes * sizeof(RGBQUAD));
-
-				std::shared_ptr<BITMAPINFOHEADER> bitmapInfoHeader = std::make_shared<BITMAPINFOHEADER>();
-				std::vector<RGBQUAD> quads;
-
-				*bitmapInfoHeader = tempBitmapInfo->bmiHeader;
-
-				if (bitmapInfoHeader->biBitCount != 24)
-				{
-					for (unsigned int i = 0; i < colorBytes; i++)
-					{
-						const RGBQUAD quad = tempBitmapInfo->bmiColors[i];
-						quads.push_back(quad);
-					}
-				}
-
-				// If not zero, use biSizeImage, otherwise calculate it using
-				// Microsoft's reccomended algorithm.
-				const DWORD size = bitmapInfoHeader->biSizeImage 
-					? bitmapInfoHeader->biSizeImage 
-					: ((((bitmapInfoHeader->biWidth * bitmapInfoHeader->biBitCount) + 31) & ~31) >> 3) * bitmapInfoHeader->biHeight;
-
-				std::shared_ptr<BYTE> pMyBits(new BYTE[size], array_deleter<BYTE>());
-				memcpy_s(pMyBits.get(), size, (reinterpret_cast<const BYTE *>(tempBitmapInfo)) + offset, size);
-
-				if (bitmapInfoHeader->biBitCount == 32 && !hasTransparentBitmapFormat)
-				{
-					for (DWORD i = 3; i < size - 1; i += 4)
-					{
-						pMyBits.get()[i] = 255;
-					}
-				}
-
 				GlobalUnlock(psClipboardData);
 
 				try
