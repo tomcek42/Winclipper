@@ -21,8 +21,10 @@ und bricht ohne es ab — auch wenn nur die EXE gebaut wird. Das Paket liegt ent
 `Winclipper/packages/` und ist per `.gitignore` ausgeschlossen; nach einem frischen Klon muss es
 wiederhergestellt werden. Die Setup-Projekte (`Setup-x64`, `Setup-x86`) brauchen zusätzlich die
 installierten WiX-Toolset-Build-Tools und lassen sich sonst gar nicht bauen. Sie binden noch die
-VC141-CRT-Merge-Module ein; seit `/MT` braucht die EXE sie nicht mehr, ob `SSUP_merge_*.msm`
-(Updater des Originalautors) sie braucht, ist ungeprüft.
+VC141-CRT-Merge-Module ein, die die EXE seit `/MT` nicht mehr braucht.
+
+Der Auto-Updater des Originalautors (SSUP) ist bewusst entfernt (F8): Er lud MSIs ohne Signaturprüfung von
+dessen Domain. Nicht wieder einbauen; ein künftiger Update-Kanal braucht signierte Pakete.
 
 Installierte Toolsets prüfen:
 `"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -all -format json`

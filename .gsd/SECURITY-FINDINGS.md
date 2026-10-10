@@ -1,7 +1,7 @@
 # Winclipper — Security-Review & Backlog
 
 Stand: 2026-10-10. Fork `tomcek42/Winclipper`, upstream `Carson-Shook/Winclipper` (keine Merges mehr geplant).
-Status: Persistenzschicht geprüft und gehärtet (F1, F3–F7 behoben). Offen: F2, ungeprüfte Bereiche unten.
+Status: Persistenzschicht gehärtet, Auto-Updater entfernt (F1, F3–F8 behoben). Offen: F2, ungeprüfte Bereiche unten.
 
 | Befund | Status | Commit |
 |---|---|---|
@@ -12,6 +12,7 @@ Status: Persistenzschicht geprüft und gehärtet (F1, F3–F7 behoben). Offen: F
 | F5 Datenrennen | behoben | `29064a4`, `89881b4`, `7139a8a`, `bf88a47` |
 | F6 `JoinPath` leerer String | behoben | `25f005a` |
 | F7 Absturz bei ungültiger `settings.dat` | behoben | `834a6ca` |
+| F8 Fremder Auto-Updater ohne Signaturprüfung | behoben | `69637f4`, `c1bbfb3` |
 
 ## Build-Setup (verifiziert)
 
@@ -91,13 +92,23 @@ leeren Pfad liefert.
 `stoi`/`stous` auf Dateiwerte ohne `try`; `1|abc` wirft eine ungefangene Exception beim Start. Jetzt wird der
 Eintrag übersprungen und der Standardwert behalten. Gültige Zahlen begrenzen die Setter ohnehin auf ihren Bereich.
 
+### F8 — Auto-Updater des Originalautors (`Winclipper/Winclipper.cpp`, `RunUpdater`) — schwerwiegend
+Jeder Start rief `StupidSimpleUpdater.exe` (geschlossenes Binary aus `SSUP_merge_*.msm`) auf. Es fragt täglich
+`https://www.carsonshook.com/Winclipper/SSUPUpdateManifest.xml` ab (am 2026-10-10 live). Das Manifest enthält nur
+Version und Download-URL, keinen Hash und keine Signatur. Wer die Domain kontrolliert (Übernahme, Ablauf,
+Kompromittierung), bestimmt die angebotene MSI; die Installation läuft per-machine. Zudem würde der Kanal die
+gehärteten Fork-Builds durch Upstream-MSIs ersetzen. Fix: Aufruf entfernt, Merge-Modul und `SSUPConfig.xml` aus
+beiden Installern entfernt. Der Fork hat keinen Update-Kanal.
+
+Offen (Folgepunkt): Installer verwendet weiter `UpgradeCode` und `Manufacturer` von Upstream. Eine Upstream-MSI
+gleicher oder höherer Version ersetzt den Fork per `MajorUpgrade`. Eigener `UpgradeCode` wäre sauberer, ist
+aber eine Produktentscheidung.
+
 ## Noch nicht geprueft
 
 - `MainWindow.cpp` / Fensternachrichten-Handling
 - Zwischenablage-Erfassung selbst (Formate, Ownership, Groessenlimits)
 - `RegistryUtilities.cpp` (Autostart)
-- Update-Mechanismus: `SSUPConfig.xml` in beiden Setup-Projekten deutet auf einen hin — Update-Kanaele sind
-  klassisch fuer unsignierte Downloads. Hohe Prioritaet.
 
 ## Nächste Schritte
 
