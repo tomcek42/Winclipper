@@ -29,7 +29,7 @@ Status: Alle Befunde F1–F14 behoben, alle geplanten Bereiche geprüft. Clips u
 - **Bereits geaendert (uncommitted):** `Winclipper/Winclipper.vcxproj` — hartkodierter Autorenpfad
   `C:\Users\Carson Shook\Projects\Winclipper\Controls` an 4 Stellen ersetzt durch `$(SolutionDir)..\Controls`.
   Echter Upstream-Bug: ausser dem Autor konnte niemand bauen.
-- NuGet-Paket **WiX 3.11** wird von `Winclipper.vcxproj` erzwungen; nach `Winclipper/packages/WiX.3.11.0/` entpackt.
+- NuGet-Paket WiX 3.11 nicht mehr nötig (`5e8edcb`); Installer bauen per MSBuild mit installiertem WiX 3.14, VC141-Merge-Module entfernt (`799dd20`).
   Setup-Projekte brauchen zusaetzlich die WiX-Toolset-Build-Tools; fuer die reine EXE nicht noetig.
 
 ## Angreifermodell

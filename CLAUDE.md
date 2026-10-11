@@ -16,17 +16,13 @@ msbuild Winclipper/Winclipper.sln -t:Winclipper -p:Configuration=Release -p:Plat
 
 `msbuild` liegt nicht im PATH: `C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\MSBuild\Current\Bin\MSBuild.exe`.
 
-`Winclipper.vcxproj` erzwingt das NuGet-Paket **WiX 3.11** (`packages\WiX.3.11.0\build\wix.props`)
-und bricht ohne es ab — auch wenn nur die EXE gebaut wird. Das Paket liegt entpackt unter
-`Winclipper/packages/` und ist per `.gitignore` ausgeschlossen; nach einem frischen Klon muss es
-wiederhergestellt werden. Die Setup-Projekte (`Setup-x64`, `Setup-x86`) lassen sich mit MSBuild 18
-nicht bauen: `WixTasks.dll` aus 3.11 lädt dort nicht, und das installierte WiX 3.14 braucht .NET 3.5 und Adminrechte.
-Die MSIs entstehen stattdessen direkt mit `candle`/`light` aus `Winclipper/packages/WiX.3.11.0/tools`
-(im Verzeichnis `Setup-<arch>`, absolute Pfade verwenden):
-`candle -arch x64 -dWinclipper.TargetPath=<abs. Pfad zur EXE> -ext WixUtilExtension.dll -ext WixUIExtension.dll Product.wxs`,
-dann `light -ext … -cultures:en-us -out WinclipperSetup-x64.msi Product.wixobj`. Für x86 vorher die EXE mit
-`-p:Platform=x86` bauen (`Winclipper/Release/`). Die ICE69/ICE82-Warnungen sind bekannt und harmlos. Die Installer
-binden noch die VC141-CRT-Merge-Module ein, die die EXE seit `/MT` nicht mehr braucht.
+Die Installer brauchen das installierte **WiX Toolset 3.14** (`C:\Program Files (x86)\WiX Toolset v3.14`, Installation
+braucht Admin + .NET 3.5). Das Setup-Projekt einzeln bauen, nicht über die `.sln`, und `SolutionDir` mitgeben — es
+baut die EXE der passenden Plattform mit:
+`msbuild Setup-x64/Setup-x64.wixproj -p:Configuration=Release -p:Platform=x64 -p:SolutionDir=<abs. Pfad>\Winclipper\`
+(x86 analog, MSI unter `Setup-x86/bin/Release/`). Die ICE69-Warnungen sind bekannt und harmlos. Das früher erzwungene
+NuGet-Paket WiX 3.11 (`Winclipper/packages/`) wird nicht mehr gebraucht; seine `WixTasks.dll` lädt in MSBuild 18
+nicht. Die VC141-CRT-Merge-Module sind entfernt, weil die EXE die CRT statisch linkt.
 
 Der Auto-Updater des Originalautors (SSUP) ist bewusst entfernt (F8): Er lud MSIs ohne Signaturprüfung von
 dessen Domain. Nicht wieder einbauen; ein künftiger Update-Kanal braucht signierte Pakete.
