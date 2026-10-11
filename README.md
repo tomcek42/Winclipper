@@ -1,5 +1,11 @@
 # Winclipper
 
+> **This is a security-hardened fork of [Carson-Shook/Winclipper](https://github.com/Carson-Shook/Winclipper).**
+> It fixes memory-safety bugs in clipboard and file parsing, encrypts saved clips with DPAPI, ignores content that
+> password managers mark as private, and removes the original auto-updater, which downloaded unsigned installers.
+> See [CHANGELOG.md](CHANGELOG.md) and [the security findings](.gsd/SECURITY-FINDINGS.md). Installers are on the
+> [Releases](https://github.com/tomcek42/Winclipper/releases) page.
+
 Winclipper is a lightweight Win32 application that saves everything that you copy so that you can paste it later when you really need it. It's designed with Unicode in mind so that you can copy any character from any language or a string of emojis and know that it will paste correctly.
 
 A built in preview ensures that you know exactly what you are pasting when a single-line preview isn't enough. Other clipboard applications have been useful to me for software development, but in my day-to-day work I regularly have to copy multiple lines of code that all look similar from the first line (lots of xml); that is the problem that Winclipper is built to solve.
@@ -8,9 +14,29 @@ The menu is simple and can be summoned with a hotkey of your choice (default: Ct
 
 ## Building Winclipper
 
-You will need Visual Studio 2017 to build Winclipper. The solution file should contain everything that you need to build. If you want to build the setup projects, then you will need to install [WiX](http://wixtoolset.org).
+You need the Visual Studio 2026 Build Tools (MSVC toolset v145, Windows SDK 10.0.26100.0) and the .NET SDK.
+The CRT is linked statically, so the EXE needs no VC++ redistributable.
+
+```
+msbuild Winclipper/Winclipper.sln -p:Configuration=Release -p:Platform=x64
+```
+
+A full solution build also builds the installer of that platform. The installers use [WiX 7](https://wixtoolset.org)
+as an SDK project (restored from NuGet, no installation required). They package the EXE but do not build it, so to
+build an installer on its own, build the EXE first and then run `dotnet build -c Release` in `Setup-x64` or
+`Setup-x86`. WiX 7 requires accepting the [Open Source Maintenance Fee EULA](https://wixtoolset.org/osmf/).
 
 ## Changelog
+
+**1.5.0** - 2026-10-11 (this fork)
+
+Security hardening release. See [CHANGELOG.md](CHANGELOG.md) for the full list.
+- Fixed memory-safety bugs when reading clipboard data, saved clips, cached images and registry values.
+- Saved clips and cached images are encrypted with DPAPI; image thumbnails are no longer written to disk.
+- Content that password managers mark as excluded from clipboard history is no longer saved.
+- Removed the auto-updater, which installed unsigned packages. The installer replaces upstream installations.
+- Fixed deleting the wrong clip via right-click, the autostart path quoting and the tray icon staying after exit.
+- Built with current tools (MSVC v145, static CRT, WiX 7).
 
 **1.4.2** - 2021-12-15
 

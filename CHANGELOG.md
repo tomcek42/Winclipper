@@ -1,34 +1,39 @@
 # Changelog
 
-Änderungen dieses Forks gegenüber `Carson-Shook/Winclipper` 1.4.2. Details zu jedem Befund:
+Changes in this fork compared to `Carson-Shook/Winclipper` 1.4.2. Details on each finding:
 `.gsd/SECURITY-FINDINGS.md`.
 
-## 1.5.0 — Sicherheitshärtung (2026-10-11)
+## Unreleased
 
-### Sicherheit
-- **F1** Heap-Over-Read beim Laden gecachter Bitmaps behoben; alle Header-Felder werden gegen die Dateigröße geprüft.
-- **F2** `clips.dat` und `BitmapCache\` werden mit DPAPI (benutzergebunden) verschlüsselt. Klartextdateien älterer
-  Versionen werden beim Start migriert. Vorschaubilder liegen nur noch im Speicher, alte `-thumb`-BMPs werden gelöscht.
-- **F3** `File::Delete` meldete Erfolg invertiert.
-- **F4** `File::DeleteDir` ohne doppelte NUL-Terminierung.
-- **F5** Datenrennen im Bitmap-Cache, in den Writer-Threads und in `ClipsCollection` behoben (Mutex/atomics);
-  Use-after-free im asynchronen Bitmap-Lader behoben.
-- **F6** Undefiniertes Verhalten in `File::JoinPath` bei leerem String.
-- **F7** Ungültige `settings.dat` bricht den Start nicht mehr ab.
-- **F8** Auto-Updater des Originalautors (unsignierte MSI-Downloads) entfernt. Eigene `UpgradeCode`s; Upstream-
-  Installationen werden beim Installieren entfernt.
-- **F9** `CF_DIB`-Daten aus der Zwischenablage werden vollständig gegen die Blockgröße validiert (Over-Read/Overflow).
-- **F10** `CF_UNICODETEXT` wird auf die Blockgröße begrenzt gelesen.
-- **F11** Rechtsklick „Delete“ im Menü löscht den richtigen Clip und stürzt nicht mehr ab.
-- **F12** Registry-Werte werden typ- und größengeprüft gelesen (`RegGetValueW`).
-- **F13** Autostart-Pfad in Anführungszeichen (Einstellungen und Installer); Registry-Rückgabewerte geprüft.
-- **F14** Als „nicht in den Verlauf“ markierte Inhalte (z. B. Passwörter aus Passwortmanagern) werden ignoriert.
+### Bug fixes
+- The `Winclipper.exe` version resource still reported 1.4.2.0 in the 1.5.0 release; it now reports 1.5.0.0.
 
-### Fehlerbehebungen
-- Tray-Icon wird beim Beenden entfernt.
+## 1.5.0 — Security hardening (2026-10-11)
+
+### Security
+- **F1** Fixed a heap over-read when loading cached bitmaps; every header field is now checked against the file size.
+- **F2** `clips.dat` and `BitmapCache\` are encrypted with DPAPI (bound to the current user). Plaintext files from
+  older versions are migrated at startup. Thumbnails are kept in memory only; old `-thumb` BMP files are deleted.
+- **F3** `File::Delete` reported success inverted.
+- **F4** `File::DeleteDir` was missing the double NUL terminator.
+- **F5** Fixed data races in the bitmap cache, the writer threads and `ClipsCollection` (mutex/atomics);
+  fixed a use-after-free in the asynchronous bitmap loader.
+- **F6** Undefined behavior in `File::JoinPath` with an empty string.
+- **F7** An invalid `settings.dat` no longer aborts startup.
+- **F8** Removed the original author's auto-updater (unsigned MSI downloads). Own `UpgradeCode`s; upstream
+  installations are removed during setup.
+- **F9** `CF_DIB` clipboard data is fully validated against the block size (over-read/overflow).
+- **F10** `CF_UNICODETEXT` is read bounded by the block size.
+- **F11** Right-click "Delete" in the menu deletes the correct clip and no longer crashes.
+- **F12** Registry values are read with type and size checks (`RegGetValueW`).
+- **F13** Autostart path is quoted (settings and installer); registry return values are checked.
+- **F14** Content marked as excluded from clipboard history (e.g. passwords from password managers) is ignored.
+
+### Bug fixes
+- The tray icon is removed on exit.
 
 ### Build
-- Toolset v145, Windows SDK 10.0.26100.0, statisch gelinkte CRT (`/MT`); keine VC++-Redistributable nötig.
-- Hartkodierter Include-Pfad des Originalautors ersetzt.
-- Installer auf WiX 7 (SDK-Projekte, `dotnet build`) umgestellt; VC141-Merge-Module und WiX-3.11-Paket entfernt.
-- Setup-Projekte in `Winclipper.sln` mit WiX-SDK-Projekttyp; voller `.sln`-Build baut die MSI mit.
+- Toolset v145, Windows SDK 10.0.26100.0, statically linked CRT (`/MT`); no VC++ redistributable required.
+- Replaced the original author's hard-coded include path.
+- Installers migrated to WiX 7 (SDK projects, `dotnet build`); removed the VC141 merge modules and the WiX 3.11 package.
+- Setup projects registered in `Winclipper.sln` with the WiX SDK project type; a full `.sln` build also builds the MSI.
