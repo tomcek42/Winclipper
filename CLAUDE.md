@@ -28,7 +28,9 @@ The version number lives in three places: `Winclipper/Winclipper.rc` (`VERSIONIN
 both `Setup-*/Product.wxs`. Bump them together.
 
 The original author's auto-updater (SSUP) was removed on purpose (F8): it downloaded MSIs from the author's domain
-without signature checks. Do not add it back; a future update channel needs signed packages.
+without signature checks. Do not add it back. The fork's own updater (`Updater.cpp`, `docs/UPDATER.md`) only installs
+MSIs pinned by a manifest signed with the release key; never relax the signature, downgrade or URL-prefix checks.
+Every release that should reach auto-updating users needs `tools/sign-update.ps1` and its two assets.
 
 Check installed toolsets:
 `"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -all -format json`
