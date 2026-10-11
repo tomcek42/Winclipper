@@ -21,7 +21,7 @@ EXE **nicht** mit: erst die EXE der Plattform per msbuild bauen (x86: `-p:Platfo
 `Winclipper/Release/`), dann im Verzeichnis `Setup-<arch>` `dotnet build -c Release`
 (MSI unter `Setup-<arch>/bin/<arch>/Release/`). Die Zustimmung zur OSMF-EULA steht als `AcceptEula` im `.wixproj`
 (vom Projektinhaber erteilt); ohne sie bricht WiX 7 mit WIX7015 ab. ICE69 ist bewusst unterdrückt (harmlos).
-Die Setup-Einträge in `Winclipper.sln` haben noch den alten WiX-3-Projekttyp; die `.sln` daher nur mit `-t:Winclipper` bauen.
+Die Setup-Einträge in `Winclipper.sln` tragen den WiX-SDK-Projekttyp; ein voller `.sln`-Build (ohne `-t:`) baut die MSI der Plattform mit.
 Die VC141-CRT-Merge-Module sind entfernt, weil die EXE die CRT statisch linkt.
 
 Der Auto-Updater des Originalautors (SSUP) ist bewusst entfernt (F8): Er lud MSIs ohne Signaturprüfung von
