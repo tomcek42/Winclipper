@@ -1,84 +1,70 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-	<Product Id="*" Name="Winclipper" Language="1033" Version="1.4.2.0" Manufacturer="Carson Shook" UpgradeCode="e64c8813-7d5e-4c7e-86f4-5482809b2f4e">
-		<Package InstallerVersion="301" Compressed="yes" InstallScope="perMachine" />
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="Winclipper" Language="1033" Version="1.4.2.0" Manufacturer="Carson Shook" UpgradeCode="e64c8813-7d5e-4c7e-86f4-5482809b2f4e" InstallerVersion="301" Scope="perMachine">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
 
-		<MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <!-- Own UpgradeCode: an upstream MSI must not replace this hardened fork. -->
+    <!-- Upstream installs (any version) are removed so both do not coexist. -->
+    <Upgrade Id="34e3392e-e835-41c9-ac2b-f0c68176f4ca">
+      <UpgradeVersion Minimum="0.0.0.0" IncludeMinimum="yes" OnlyDetect="no" Property="UPSTREAMWINCLIPPERFOUND" />
+    </Upgrade>
+    <MediaTemplate EmbedCab="yes" />
 
-		<!-- Own UpgradeCode: an upstream MSI must not replace this hardened fork. -->
-		<!-- Upstream installs (any version) are removed so both do not coexist. -->
-		<Upgrade Id="34e3392e-e835-41c9-ac2b-f0c68176f4ca">
-			<UpgradeVersion Minimum="0.0.0.0" IncludeMinimum="yes" OnlyDetect="no" Property="UPSTREAMWINCLIPPERFOUND" />
-		</Upgrade>
-		<MediaTemplate EmbedCab="yes" />
-
-    <Icon Id="Winclipper.ico" SourceFile="..\Winclipper\Winclipper.ico"/>
+    <Icon Id="Winclipper.ico" SourceFile="..\Winclipper\Winclipper.ico" />
     <Property Id="ARPPRODUCTICON" Value="Winclipper.ico" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT" Value="Thank you for installing Winclipper." />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch Winclipper" />
     <Property Id="WixShellExecTarget" Value="[#Winclipper.exe]" />
-    <CustomAction Id="LaunchApplication" BinaryKey="WixCA" DllEntry="WixShellExec" Impersonate="yes" />
+    <CustomAction Id="LaunchApplication" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" DllEntry="WixShellExec" Impersonate="yes" />
 
     <WixVariable Id="WixUILicenseRtf" Value="..\license.rtf" />
-    <WixVariable Id="WixUIBannerBmp" Value="..\SetupResources\Winclipper-WixUIBanner.bmp"/>
-    <WixVariable Id="WixUIDialogBmp" Value="..\SetupResources\Winclipper-WixUIDialog.bmp"/>
-    
+    <WixVariable Id="WixUIBannerBmp" Value="..\SetupResources\Winclipper-WixUIBanner.bmp" />
+    <WixVariable Id="WixUIDialogBmp" Value="..\SetupResources\Winclipper-WixUIDialog.bmp" />
+
     <UI>
-      <UIRef Id="WixUI_Minimal" />
-      <Publish Dialog="ExitDialog"
-        Control="Finish" 
-        Event="DoAction" 
-        Value="LaunchApplication">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed</Publish>
+      <ui:WixUI Id="WixUI_Minimal" />
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApplication" Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed" />
     </UI>
-    
+
     <Feature Id="ProductFeature" Title="Winclipper" Level="1">
-      <ComponentRef Id="Winclipper.exe"/>
-      <ComponentRef Id="license"/>
-      <ComponentRef Id="readme"/>
-      <ComponentRef Id="ApplicationShortcut"/>
-      <ComponentRef Id="RegistryEntries"/>
-		</Feature>
+      <ComponentRef Id="Winclipper.exe" />
+      <ComponentRef Id="license" />
+      <ComponentRef Id="readme" />
+      <ComponentRef Id="ApplicationShortcut" />
+      <ComponentRef Id="RegistryEntries" />
+    </Feature>
 
-		<Directory Id="TARGETDIR" Name="SourceDir">
-			<Directory Id="ProgramFiles64Folder">
-				<Directory Id="APPLICATIONROOTDIRECTORY" Name="Winclipper" />
-			</Directory>
-      <Directory Id="ProgramMenuFolder">
-        <Directory Id="ApplicationProgramsFolder" Name="Winclipper"/>
-      </Directory>
-		</Directory>
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="APPLICATIONROOTDIRECTORY" Name="Winclipper" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="Winclipper" />
+    </StandardDirectory>
 
-    <DirectoryRef Id="TARGETDIR">
-      <Component Id="RegistryEntries" Guid="94F2A810-E24E-429A-8886-A15F5A9B1897">
-          <RegistryKey Root="HKCU"
-                       Key="Software\Microsoft\Windows\CurrentVersion\Run">
-              <RegistryValue Type="string" Name="Winclipper" Value="&quot;[#Winclipper.exe]&quot;" />
-          </RegistryKey>
-      </Component>
-    </DirectoryRef>
-  
-		<DirectoryRef Id="APPLICATIONROOTDIRECTORY">
-			<Component Id="Winclipper.exe" Guid="D1C47046-027D-44D4-AC53-706794AD1D94">
+    <DirectoryRef Id="APPLICATIONROOTDIRECTORY">
+      <Component Id="Winclipper.exe" Guid="D1C47046-027D-44D4-AC53-706794AD1D94">
         <File Id="Winclipper.exe" Source="$(var.Winclipper.TargetPath)" KeyPath="yes" Checksum="yes" />
       </Component>
       <Component Id="license" Guid="CDDA7A8E-F4F3-45F1-8FA3-4443282ECB4F">
-        <File Id="license" Source="..\license.rtf" KeyPath="yes"/>
+        <File Id="license" Source="..\license.rtf" KeyPath="yes" />
       </Component>
       <Component Id="readme" Guid="759817FC-9980-4D43-8106-519276331AE8">
-        <File Id="readme" Name="readme.txt" Source="..\readme.md" KeyPath="yes"/>
+        <File Id="readme" Name="readme.txt" Source="..\readme.md" KeyPath="yes" />
+      </Component>
+      <!-- Registry-only component; the directory only anchors it (was TARGETDIR in WiX 3). -->
+      <Component Id="RegistryEntries" Guid="94F2A810-E24E-429A-8886-A15F5A9B1897">
+        <RegistryKey Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run">
+          <RegistryValue Type="string" Name="Winclipper" Value="&quot;[#Winclipper.exe]&quot;" />
+        </RegistryKey>
       </Component>
     </DirectoryRef>
 
     <DirectoryRef Id="ApplicationProgramsFolder">
       <Component Id="ApplicationShortcut" Guid="AAFEFE95-5C68-4CAD-8D55-25B3C5563FBB">
-        <Shortcut Id="ApplicationStartMenuShortcut"
-                  Name="Winclipper"
-                  Description="Winclipper Shortcut"
-                  Target="[#Winclipper.exe]"
-                  WorkingDirectory="ProductComponents"/>
-        <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall"/>
-        <RegistryValue Root="HKCU" Key="Software\Microsoft\Winclipper" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
+        <Shortcut Id="ApplicationStartMenuShortcut" Name="Winclipper" Description="Winclipper Shortcut" Target="[#Winclipper.exe]" WorkingDirectory="APPLICATIONROOTDIRECTORY" />
+        <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\Microsoft\Winclipper" Name="installed" Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </DirectoryRef>
-  </Product>
+  </Package>
 </Wix>
