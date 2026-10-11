@@ -32,9 +32,6 @@
     </UI>
     
     <Feature Id="ProductFeature" Title="Winclipper" Level="1">
-      <Feature Id="VCRedist" Title="Visual C++ 14 Runtime" AllowAdvertise="no" Display="hidden" Level="1">
-        <MergeRef Id="VCRedist"/>
-      </Feature>
       <ComponentRef Id="Winclipper.exe" />
       <ComponentRef Id="license"/>
       <ComponentRef Id="readme"/>
@@ -43,7 +40,6 @@
 		</Feature>
 
 		<Directory Id="TARGETDIR" Name="SourceDir">
-      <Merge Id="VCRedist" SourceFile="Microsoft_VC141_CRT_x86.msm" DiskId="1" Language="0"/>
 			<Directory Id="ProgramFilesFolder">
 				<Directory Id="APPLICATIONROOTDIRECTORY" Name="Winclipper" />
 			</Directory>

@@ -32,7 +32,6 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <Content Include="Microsoft_VC141_CRT_x86.msm" />
   </ItemGroup>
   <ItemGroup>
     <WixExtension Include="WixUtilExtension">
