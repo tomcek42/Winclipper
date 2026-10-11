@@ -16,13 +16,13 @@ msbuild Winclipper/Winclipper.sln -t:Winclipper -p:Configuration=Release -p:Plat
 
 `msbuild` liegt nicht im PATH: `C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\MSBuild\Current\Bin\MSBuild.exe`.
 
-Die Installer brauchen das installierte **WiX Toolset 3.14** (`C:\Program Files (x86)\WiX Toolset v3.14`, Installation
-braucht Admin + .NET 3.5). Das Setup-Projekt einzeln bauen, nicht über die `.sln`, und `SolutionDir` mitgeben — es
-baut die EXE der passenden Plattform mit:
-`msbuild Setup-x64/Setup-x64.wixproj -p:Configuration=Release -p:Platform=x64 -p:SolutionDir=<abs. Pfad>\Winclipper\`
-(x86 analog, MSI unter `Setup-x86/bin/Release/`). Die ICE69-Warnungen sind bekannt und harmlos. Das früher erzwungene
-NuGet-Paket WiX 3.11 (`Winclipper/packages/`) wird nicht mehr gebraucht; seine `WixTasks.dll` lädt in MSBuild 18
-nicht. Die VC141-CRT-Merge-Module sind entfernt, weil die EXE die CRT statisch linkt.
+Die Installer sind **WiX 7** (SDK-Projekte, `WixToolset.Sdk` per NuGet, keine Installation nötig). Sie bauen die
+EXE **nicht** mit: erst die EXE der Plattform per msbuild bauen (x86: `-p:Platform=x86`, landet in
+`Winclipper/Release/`), dann im Verzeichnis `Setup-<arch>` `dotnet build -c Release`
+(MSI unter `Setup-<arch>/bin/<arch>/Release/`). Die Zustimmung zur OSMF-EULA steht als `AcceptEula` im `.wixproj`
+(vom Projektinhaber erteilt); ohne sie bricht WiX 7 mit WIX7015 ab. ICE69 ist bewusst unterdrückt (harmlos).
+Die Setup-Einträge in `Winclipper.sln` haben noch den alten WiX-3-Projekttyp; die `.sln` daher nur mit `-t:Winclipper` bauen.
+Die VC141-CRT-Merge-Module sind entfernt, weil die EXE die CRT statisch linkt.
 
 Der Auto-Updater des Originalautors (SSUP) ist bewusst entfernt (F8): Er lud MSIs ohne Signaturprüfung von
 dessen Domain. Nicht wieder einbauen; ein künftiger Update-Kanal braucht signierte Pakete.
