@@ -3,7 +3,7 @@
 Changes in this fork compared to `Carson-Shook/Winclipper` 1.4.2. Details on each finding:
 `.gsd/SECURITY-FINDINGS.md`.
 
-## Unreleased
+## 1.5.1 (2026-10-11)
 
 ### Bug fixes
 - The `Winclipper.exe` version resource still reported 1.4.2.0 in the 1.5.0 release; it now reports 1.5.0.0.

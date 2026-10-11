@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
-  <Package Name="Winclipper" Language="1033" Version="1.5.0.0" Manufacturer="Carson Shook" UpgradeCode="71d0418d-bb4d-480b-a6e8-5d402bd6b7e0" InstallerVersion="301" Scope="perMachine">
+  <Package Name="Winclipper" Language="1033" Version="1.5.1.0" Manufacturer="Carson Shook" UpgradeCode="71d0418d-bb4d-480b-a6e8-5d402bd6b7e0" InstallerVersion="301" Scope="perMachine">
     <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
 
     <!-- Own UpgradeCode: an upstream MSI must not replace this hardened fork. -->

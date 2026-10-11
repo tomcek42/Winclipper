@@ -28,6 +28,10 @@ build an installer on its own, build the EXE first and then run `dotnet build -c
 
 ## Changelog
 
+**1.5.1** - 2026-10-11 (this fork)
+
+- `Winclipper.exe` now reports its version correctly (1.5.0 still reported 1.4.2.0).
+
 **1.5.0** - 2026-10-11 (this fork)
 
 Security hardening release. See [CHANGELOG.md](CHANGELOG.md) for the full list.
