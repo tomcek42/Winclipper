@@ -3,7 +3,7 @@
 Änderungen dieses Forks gegenüber `Carson-Shook/Winclipper` 1.4.2. Details zu jedem Befund:
 `.gsd/SECURITY-FINDINGS.md`.
 
-## Unveröffentlicht — Sicherheitshärtung (2026-10-11)
+## 1.5.0 — Sicherheitshärtung (2026-10-11)
 
 ### Sicherheit
 - **F1** Heap-Over-Read beim Laden gecachter Bitmaps behoben; alle Header-Felder werden gegen die Dateigröße geprüft.
