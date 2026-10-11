@@ -260,3 +260,6 @@ ModelManifest.xml
 .gsd/STATE.md
 .gsd/CODEBASE.md
 .gsd/phases/*/*-CONTINUE.md
+
+# Locally built installers
+dist/
