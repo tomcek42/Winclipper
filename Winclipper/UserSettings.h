@@ -41,6 +41,9 @@
 #define PASTE_ON_CLICK		10
 #define PASTE_ON_CLICK_DEF	true
 
+#define AUTO_UPDATE			11
+#define AUTO_UPDATE_DEF		false
+
 // Save and load user settings to and from disk
 class UserSettings : public Notify
 {
@@ -56,6 +59,7 @@ private:
 	static bool				pasteOnClick;
 	static bool				saveImages;
 	static unsigned int		maxCacheMegabytes;
+	static bool				autoUpdate;
 
 	static std::atomic<int>	settingWriterWaitCount;
 	static std::atomic<bool>	isWriterFinished;
@@ -118,6 +122,9 @@ public:
 
 	static unsigned int		MaxCacheMegabytes();
 	static void				SetMaxCacheMegabytes(unsigned int maxCacheMegabytes);
+
+	static bool				AutoUpdate();
+	static void				SetAutoUpdate(bool autoUpdate);
 
 };
 

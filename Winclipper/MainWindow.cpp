@@ -95,6 +95,9 @@ LRESULT MainWindow::MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		case NTF_MAXCACHEMBYTES_CHANGED:
 			pThis->WmCommandNtfMaxcacheMBytesChanged(hWnd, wParam, lParam);
 			break;
+		case NTF_AUTOUPDATE_CHANGED:
+			pThis->WmCommandNtfAutoUpdateChanged(hWnd, wParam, lParam);
+			break;
 		default:
 			return DefWindowProcW(hWnd, message, wParam, lParam);
 		}
@@ -113,6 +116,22 @@ LRESULT MainWindow::MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		case WM_CONTEXTMENU:
 			pThis->WmappNCallWmContextMenu(hWnd, wParam, lParam);
 			break;
+		}
+		break;
+	case Updater::WMAPP_UPDATE_STATE:
+		pThis->WmappUpdateState(hWnd, wParam, lParam);
+		break;
+	case WM_TIMER:
+		pThis->WmTimer(hWnd, wParam, lParam);
+		break;
+	case WM_CLOSE:
+		// The Restart Manager closes the app this way when an update replaces it.
+		pThis->WmCommandIdmExit(hWnd, wParam, lParam);
+		break;
+	case WM_ENDSESSION:
+		if (wParam)
+		{
+			pThis->WmCommandIdmExit(hWnd, wParam, lParam);
 		}
 		break;
 	case WM_CLIPBOARDUPDATE:
@@ -270,6 +289,39 @@ LRESULT MainWindow::WmCommandNtfMaxcacheMBytesChanged(HWND hWnd, WPARAM wParam, 
 	return 0;
 }
 
+LRESULT MainWindow::WmCommandNtfAutoUpdateChanged(HWND hWnd, WPARAM wParam, LPARAM lParam)
+{
+	Updater::SetEnabled(UserSettings::AutoUpdate());
+	return 0;
+}
+
+// The tray icon blinks while an automatic update is downloaded and installed.
+LRESULT MainWindow::WmappUpdateState(HWND hWnd, WPARAM wParam, LPARAM lParam)
+{
+	if (wParam)
+	{
+		SetTimer(hWnd, ID_BLINK_TIMER, BLINK_INTERVAL_MS, nullptr);
+		SetNotificationIcon(trayIcon, L"Winclipper - installing update");
+	}
+	else
+	{
+		KillTimer(hWnd, ID_BLINK_TIMER);
+		trayIconVisible = true;
+		SetNotificationIcon(trayIcon, L"Winclipper");
+	}
+	return 0;
+}
+
+LRESULT MainWindow::WmTimer(HWND hWnd, WPARAM wParam, LPARAM lParam)
+{
+	if (wParam == ID_BLINK_TIMER)
+	{
+		trayIconVisible = !trayIconVisible;
+		SetNotificationIcon(trayIconVisible ? trayIcon : blankTrayIcon, nullptr);
+	}
+	return 0;
+}
+
 LRESULT MainWindow::WmappNCallNinKeySelect(HWND hWnd, WPARAM wParam, LPARAM lParam)
 {
 	// This prevents any additional keypresses from being 
@@ -379,6 +431,11 @@ LRESULT MainWindow::WmCreate(HWND hWnd, WPARAM wParam, LPARAM lParam)
 	SettingsWindow::Subscribe(hWnd);
 
 	cManager = new ClipsManager();
+
+	// Lets the Restart Manager start Winclipper again after an update closed it.
+	RegisterApplicationRestart(L"", RESTART_NO_CRASH | RESTART_NO_HANG | RESTART_NO_REBOOT);
+	Updater::Start(hWnd);
+	Updater::SetEnabled(UserSettings::AutoUpdate());
 	return 0;
 }
 
@@ -388,6 +445,7 @@ LRESULT MainWindow::WmDestroy(HWND hWnd, WPARAM wParam, LPARAM lParam)
 	delete cManager;
 	previewWindow = nullptr;
 	cManager = nullptr;
+	KillTimer(hWnd, ID_BLINK_TIMER);
 	DeleteNotificationIcon();
 	PostQuitMessage(0);
 	return 0;
@@ -566,16 +624,46 @@ bool MainWindow::AddNotificationIcon(HWND hWnd, HINSTANCE hInstance)
 {
 	NOTIFYICONDATA nid = { sizeof(nid) };
 	nid.hWnd = hWnd;
-	nid.uFlags = NIF_ICON | NIF_MESSAGE;
+	nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
 	nid.uCallbackMessage = WMAPP_NOTIFYCALLBACK;
 	nid.uID = UID_NOTIFYICON;
-	// Load the icon for high DPI.
-	LoadIconMetric(hInstance, MAKEINTRESOURCE(IDI_WINCLIPPER), LIM_SMALL, &nid.hIcon);
+	wcscpy_s(nid.szTip, L"Winclipper");
+	if (trayIcon == nullptr)
+	{
+		// Load the icon for high DPI.
+		LoadIconMetric(hInstance, MAKEINTRESOURCE(IDI_WINCLIPPER), LIM_SMALL, &trayIcon);
+	}
+	if (blankTrayIcon == nullptr)
+	{
+		// Fully transparent icon for the "off" phase of the update blink.
+		const int width = GetSystemMetrics(SM_CXSMICON);
+		const int height = GetSystemMetrics(SM_CYSMICON);
+		const size_t maskBytes = static_cast<size_t>((width + 15) / 16 * 2) * height;
+		std::vector<BYTE> andMask(maskBytes, 0xFF);
+		std::vector<BYTE> xorMask(maskBytes, 0x00);
+		blankTrayIcon = CreateIcon(hInstance, width, height, 1, 1, andMask.data(), xorMask.data());
+	}
+	nid.hIcon = trayIcon;
 	// Show the notification.
 	Shell_NotifyIcon(NIM_ADD, &nid);
 
 	nid.uVersion = NOTIFYICON_VERSION_4;
 	return Shell_NotifyIcon(NIM_SETVERSION, &nid);
+}
+
+void MainWindow::SetNotificationIcon(HICON icon, const wchar_t * tip)
+{
+	NOTIFYICONDATA nid = { sizeof(nid) };
+	nid.hWnd = windowHandle;
+	nid.uID = UID_NOTIFYICON;
+	nid.uFlags = NIF_ICON;
+	nid.hIcon = icon;
+	if (tip != nullptr)
+	{
+		nid.uFlags |= NIF_TIP;
+		wcscpy_s(nid.szTip, tip);
+	}
+	Shell_NotifyIcon(NIM_MODIFY, &nid);
 }
 
 // Removes the application notification icon from the notifcation area

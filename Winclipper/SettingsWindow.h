@@ -33,6 +33,7 @@
 #define UD_MAX_IMG_CACHE_MB     218
 
 #define CHK_PASTE_ON_CLICK	    219
+#define CHK_AUTO_UPDATE	        220
 
 
 class SettingsWindow : public Notify
@@ -68,6 +69,7 @@ private:
 	LRESULT						WmCommandChkSlct2ndClip(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandChkShowPreview(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandChkPasteOnClick(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	LRESULT						WmCommandChkAutoUpdate(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandChkSaveImages(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandTxtMaxImageCacheMb(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandHkyShowClipsMenu(HWND hWnd, WPARAM wParam, LPARAM lParam);
@@ -88,6 +90,7 @@ private:
 	Controls::Checkbox			CheckboxSelectSecondClip;
 	Controls::Checkbox			CheckboxShowPreview;
 	Controls::Checkbox			CheckboxPasteOnClick;
+	Controls::Checkbox			CheckboxAutoUpdate;
 	Controls::Checkbox			CheckboxSaveImages;
 	Controls::Label				LabelMaxCacheMbytes;
 	Controls::Spinner			SpinnerMaxCacheMbytes;

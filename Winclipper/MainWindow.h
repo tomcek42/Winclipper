@@ -5,8 +5,11 @@
 #include "PreviewWindow.h"
 #include "UserSettings.h"
 #include "SettingsWindow.h"
+#include "Updater.h"
 
 #define UID_NOTIFYICON          2180847866      // random UID for the notifyicon
+#define ID_BLINK_TIMER          1
+#define BLINK_INTERVAL_MS       500
 
 class MainWindow
 {
@@ -25,6 +28,9 @@ private:
 	LPPOINT						previousMouseLoc = new POINT;
 
 	HWND						windowHandle = nullptr;
+	HICON						trayIcon = nullptr;
+	HICON						blankTrayIcon = nullptr;
+	bool						trayIconVisible = true;
 	
 	ATOM						RegisterMainWindowClass(HINSTANCE hInstance);
 	static LRESULT CALLBACK		MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -42,6 +48,9 @@ private:
 	LRESULT						WmCommandNtfSaveToDiskChanged(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandNtfSaveImagesChanged(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandNtfMaxcacheMBytesChanged(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	LRESULT						WmCommandNtfAutoUpdateChanged(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	LRESULT						WmappUpdateState(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	LRESULT						WmTimer(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmappNCallNinKeySelect(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmappNCallWmLButtonDblClk(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmappNCallWmContextMenu(HWND hWnd, WPARAM wParam, LPARAM lParam);
@@ -59,6 +68,7 @@ private:
 
 	bool						AddNotificationIcon(HWND hWnd, HINSTANCE hInstance);
 	bool						DeleteNotificationIcon();
+	void						SetNotificationIcon(HICON icon, const wchar_t * tip);
 public:
 								MainWindow(HINSTANCE hInstance, SettingsWindow & settingsWindow);
 								~MainWindow();

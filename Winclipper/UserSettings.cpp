@@ -10,6 +10,7 @@ bool UserSettings::saveToDisk;
 bool UserSettings::select2ndClip;
 bool UserSettings::showPreview;
 bool UserSettings::pasteOnClick;
+bool UserSettings::autoUpdate;
 bool UserSettings::saveImages;
 unsigned int UserSettings::maxCacheMegabytes;
 std::atomic<int> UserSettings::settingWriterWaitCount{ 0 };
@@ -86,6 +87,7 @@ void UserSettings::InitializeSettings()
 	showPreview = SHOW_PREVIEW_DEF;
 	saveImages = SAVE_IMAGES_DEF;
 	pasteOnClick = PASTE_ON_CLICK_DEF;
+	autoUpdate = AUTO_UPDATE_DEF;
 	maxCacheMegabytes = MAX_CACHE_MBYTES_DEF;
 
 	settingWriterWaitCount = 0;
@@ -323,6 +325,21 @@ void UserSettings::SetPasteOnClick(bool pasteOnClick)
 	}
 }
 
+bool UserSettings::AutoUpdate()
+{
+	return UserSettings::autoUpdate;
+}
+
+void UserSettings::SetAutoUpdate(bool autoUpdate)
+{
+	if (autoUpdate != UserSettings::autoUpdate)
+	{
+		UserSettings::autoUpdate = autoUpdate;
+		UserSettings::SendNotifcation(NTF_AUTOUPDATE_CHANGED, nullptr);
+		SaveSettingsAsync();
+	}
+}
+
 bool UserSettings::SaveImages()
 {
 	return UserSettings::saveImages;
@@ -397,6 +414,7 @@ std::vector<std::wstring> UserSettings::Serialize()
 		(std::to_wstring(SAVE_IMAGES) + SEPARATOR + std::to_wstring(SaveImages())),
 		(std::to_wstring(MAX_CACHE_MBYTES) + SEPARATOR + std::to_wstring(MaxCacheMegabytes())),
 		(std::to_wstring(PASTE_ON_CLICK) + SEPARATOR + std::to_wstring(PasteOnClick())),
+		(std::to_wstring(AUTO_UPDATE) + SEPARATOR + std::to_wstring(AutoUpdate())),
     };
 
     return retVal;
@@ -481,6 +499,12 @@ void UserSettings::Deserialize(std::vector<std::wstring> srData)
     			{
     				bool result = pair.second.compare(std::to_wstring(true)) == 0;
     				SetPasteOnClick(result);
+    			}
+    		break;
+    		case AUTO_UPDATE:
+    			{
+    				bool result = pair.second.compare(std::to_wstring(true)) == 0;
+    				SetAutoUpdate(result);
     			}
     		break;
             default:
