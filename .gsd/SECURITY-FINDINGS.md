@@ -1,188 +1,180 @@
-# Winclipper — Security-Review & Backlog
+# Winclipper — Security Review & Backlog
 
-Stand: 2026-10-10. Fork `tomcek42/Winclipper`, upstream `Carson-Shook/Winclipper` (keine Merges mehr geplant).
-Status: Alle Befunde F1–F14 behoben, alle geplanten Bereiche geprüft. Clips und Bild-Cache sind DPAPI-verschlüsselt.
+As of: 2026-10-11. Fork `tomcek42/Winclipper`, upstream `Carson-Shook/Winclipper` (no further merges planned).
+Status: all findings F1–F14 fixed, all planned areas reviewed. Clips and the image cache are DPAPI-encrypted.
+Released as 1.5.0.
 
-| Befund | Status | Commit |
+| Finding | Status | Commit |
 |---|---|---|
-| F1 Heap-Over-Read Bitmap | behoben | `ac6d8aa` |
-| F2 Klartext-Clips | behoben | `b8287b9`, `b1b006b`, `aeff89c` |
-| F3 `File::Delete` invertiert | behoben | `3daeee5` |
-| F4 `DeleteDir` NUL-Terminierung | behoben | `297178c` |
-| F5 Datenrennen | behoben | `29064a4`, `89881b4`, `7139a8a`, `bf88a47` |
-| F6 `JoinPath` leerer String | behoben | `25f005a` |
-| F7 Absturz bei ungültiger `settings.dat` | behoben | `834a6ca` |
-| F8 Fremder Auto-Updater ohne Signaturprüfung | behoben | `69637f4`, `c1bbfb3` |
-| F9 Ungeprüfte DIB-Daten aus der Zwischenablage | behoben | `2191642` |
-| F10 Unbegrenztes Lesen von `CF_UNICODETEXT` | behoben | `2bc2715` |
-| F11 Rechtsklick-Löschen über Menüposition | behoben | `1db2b39` |
-| F12 Stack-Overflow beim Lesen von Registry-Werten | behoben | `08187b1` |
-| F13 Autostart-Pfad ohne Anführungszeichen | behoben | `ffe49b1` |
-| F14 Ausschlussmarkierungen der Zwischenablage ignoriert | behoben | `0370fc7` |
+| F1 Heap over-read in bitmap loading | fixed | `ac6d8aa` |
+| F2 Plaintext clips | fixed | `b8287b9`, `b1b006b`, `aeff89c` |
+| F3 `File::Delete` inverted | fixed | `3daeee5` |
+| F4 `DeleteDir` NUL termination | fixed | `297178c` |
+| F5 Data races | fixed | `29064a4`, `89881b4`, `7139a8a`, `bf88a47` |
+| F6 `JoinPath` with empty string | fixed | `25f005a` |
+| F7 Crash on invalid `settings.dat` | fixed | `834a6ca` |
+| F8 Third-party auto-updater without signature checks | fixed | `69637f4`, `c1bbfb3`, `61687cd` |
+| F9 Unchecked DIB data from the clipboard | fixed | `2191642` |
+| F10 Unbounded read of `CF_UNICODETEXT` | fixed | `2bc2715` |
+| F11 Right-click delete by menu position | fixed | `1db2b39` |
+| F12 Stack overflow when reading registry values | fixed | `08187b1` |
+| F13 Unquoted autostart path | fixed | `ffe49b1` |
+| F14 Clipboard exclusion markers ignored | fixed | `0370fc7` |
 
-## Build-Setup (verifiziert)
+## Build setup
 
-- Toolchain vorhanden: **VS Build Tools 2026** (18.9.12112.369), MSVC 14.51 (`v145`), Windows SDK 10.0.26100.
-  Pruefbefehl: `"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -all -format json`
-- Projekt zielt auf `v141` + Windows SDK `8.1` (beides nicht installiert). Baut ohne Codeaenderung mit:
-  `msbuild Winclipper/Winclipper.sln -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v145 -p:WindowsTargetPlatformVersion=10.0.26100.0`
-- **Bereits geaendert (uncommitted):** `Winclipper/Winclipper.vcxproj` — hartkodierter Autorenpfad
-  `C:\Users\Carson Shook\Projects\Winclipper\Controls` an 4 Stellen ersetzt durch `$(SolutionDir)..\Controls`.
-  Echter Upstream-Bug: ausser dem Autor konnte niemand bauen.
-- NuGet-Paket WiX 3.11 nicht mehr nötig (`5e8edcb`); Installer bauen per MSBuild mit installiertem WiX 3.14, VC141-Merge-Module entfernt (`799dd20`).
-  Setup-Projekte brauchen zusaetzlich die WiX-Toolset-Build-Tools; fuer die reine EXE nicht noetig.
+- Toolchain: **VS Build Tools 2026**, MSVC 14.51 (`v145`), Windows SDK 10.0.26100. Both projects are pinned to it
+  and link the CRT statically (`7f09f69`). Upstream targeted `v141` + SDK `8.1`.
+- Upstream's `Winclipper.vcxproj` contained the author's hard-coded path
+  `C:\Users\Carson Shook\Projects\Winclipper\Controls` in four places, so nobody but the author could build it.
+  Replaced with `$(SolutionDir)..\Controls` (`8a6ed15`).
+- The WiX 3.11 NuGet package is no longer required (`5e8edcb`), the VC141 merge modules are removed (`799dd20`).
+  The installers are WiX 7 SDK projects (`5fb77ac`) and need no installed toolset. Build commands: `CLAUDE.md`.
 
-## Angreifermodell
+## Threat model
 
-Angriffsflaeche ist `%LOCALAPPDATA%\Winclipper\Winclipper\` (Clips-Datei + `BitmapCache\`).
-Jeder Prozess im Benutzerkontext kann diese Dateien manipulieren; Winclipper parst sie beim Start ohne jede Validierung.
+The attack surface is `%LOCALAPPDATA%\Winclipper\Winclipper\` (clips file + `BitmapCache\`), the clipboard and
+HKCU registry values. Any process in the user's context can modify the files; upstream Winclipper parsed them at
+startup without any validation. Any process in the session can put arbitrary data on the clipboard.
 
-## Befunde
+## Findings
 
-### F1 — Heap-Over-Read beim Bitmap-Laden (`Winclipper/Bitmap.cpp:57-115`) — schwerwiegend
+### F1 — Heap over-read in bitmap loading (`Winclipper/Bitmap.cpp:57-115`) — severe
 ```cpp
-const size_t bmSize = header.bfSize - header.bfOffBits;   // beide aus der Datei
+const size_t bmSize = header.bfSize - header.bfOffBits;   // both from the file
 std::shared_ptr<BYTE> bits(new BYTE[bmSize], array_deleter<BYTE>());
 stream.readsome(reinterpret_cast<char *>(bits.get()), bmSize);
 ```
-- Unsigned-Underflow, falls `bfOffBits > bfSize` → `bmSize` nahe 2^64 (DoS) oder gezielt kleiner Puffer.
-- Rueckgabewert von `readsome` nie geprueft → Puffer ggf. uninitialisiert.
-- Kern: `GetHbitmap()` gibt den Puffer an `CreateDIBitmap`, das seine Lesemenge aus `biSizeImage`/`biWidth`/`biHeight`
-  berechnet (`Bitmap::Size()`, ~Zeile 168) — **unabhaengige** Felder derselben Datei. `bfSize-bfOffBits`=16 und
-  `biSizeImage`=16 MB liest 16 MB Heap hinter dem Puffer und rendert ihn als Vorschaubild.
-- Zusaetzlich `colorBytes` aus `biClrUsed` (DWORD) unbegrenzt → `push_back`-Schleife (~Zeile 84) bis 4 Mrd. `RGBQUAD` (64 GB).
+- Unsigned underflow if `bfOffBits > bfSize` → `bmSize` close to 2^64 (DoS) or a deliberately small buffer.
+- The return value of `readsome` was never checked → the buffer may be uninitialized.
+- Core issue: `GetHbitmap()` passes the buffer to `CreateDIBitmap`, which derives its read size from
+  `biSizeImage`/`biWidth`/`biHeight` (`Bitmap::Size()`, ~line 168) — **independent** fields of the same file.
+  `bfSize-bfOffBits` = 16 and `biSizeImage` = 16 MB reads 16 MB of heap behind the buffer and renders it as a
+  thumbnail.
+- In addition, `colorBytes` from `biClrUsed` (DWORD) was unbounded → `push_back` loop (~line 84) up to 4 billion
+  `RGBQUAD`s (64 GB).
 
-Fix: `bfOffBits <= bfSize` pruefen; `bmSize` gegen echte Dateigroesse **und** gegen `Size()` abgleichen;
-`biClrUsed` auf `1 << biBitCount` deckeln; `read()` + `gcount()` statt `readsome()`.
+Fix: check `bfOffBits <= bfSize`; validate `bmSize` against the real file size **and** against `Size()`;
+cap `biClrUsed` at `1 << biBitCount`; `read()` + `gcount()` instead of `readsome()`.
 
-### F2 — Clip-Inhalte effektiv im Klartext (`Winclipper/Clip.cpp:381`)
-Base64, keine Verschluesselung. Kopierte Passwoerter landen dauerhaft und trivial dekodierbar in `%LOCALAPPDATA%`.
-Vorschlag: `CryptProtectData` (DPAPI, benutzergebunden, keine Schluesselverwaltung) plus Beachtung der
-Zwischenablage-Formate `ExcludeClipboardContentFromMonitorProcessing` und `Clipboard Viewer Ignore`,
-die Passwort-Manager setzen — Winclipper ignoriert beide derzeit. Designaenderung, kein Patch.
+### F2 — Clip contents effectively in plaintext (`Winclipper/Clip.cpp:381`)
+Base64, no encryption. Copied passwords ended up permanently and trivially decodable in `%LOCALAPPDATA%`.
 
-Behoben: `clips.dat` und `BitmapCache\` werden per `File::WriteProtected` mit `CryptProtectData` (Benutzerschlüssel,
-feste Zusatz-Entropie, Kennung `WCDPAPI1`) geschrieben. Klartextdateien älterer Versionen werden einmal gelesen und
-sofort verschlüsselt neu geschrieben. Die `-thumb`-BMPs (unverschlüsselte Kopie jedes Bildes) entfallen; Vorschauen
-entstehen nur noch im Speicher, Altdateien werden gelöscht. Die Ausschlussformate sind seit F14 berücksichtigt.
-Grenzen: DPAPI schützt gegen Offline-Zugriff (gestohlene Platte, Backup, anderer Benutzer), nicht gegen Code, der
-als derselbe Benutzer läuft — der kann `CryptUnprotectData` selbst aufrufen. Eine wirksame Alternative ohne
-Passwortabfrage gibt es dafür nicht; maximaler Schutz ist „Save clips to disk“ aus. `settings.dat` bleibt
-unverschlüsselt (keine Inhalte).
+Fixed: `clips.dat` and `BitmapCache\` are written via `File::WriteProtected` with `CryptProtectData` (user key,
+fixed additional entropy, marker `WCDPAPI1`). Plaintext files from older versions are read once and immediately
+rewritten encrypted; at startup `OnDemandBitmapManager::ProtectDiskCache` also encrypts orphaned cache files.
+The `-thumb` BMPs (an unencrypted copy of every image) are gone; thumbnails exist only in memory and old files are
+deleted. The exclusion formats are honored since F14.
+Limits: DPAPI protects against offline access (stolen disk, backup, another user), not against code running as the
+same user — that code can call `CryptUnprotectData` itself. There is no effective alternative without a password
+prompt; maximum protection is turning "Save clips to disk" off. `settings.dat` stays unencrypted (no content).
+Rewriting files in place does not securely erase old plaintext blocks on disk.
 
-### F3 — `File::Delete` gibt bei Erfolg `false` zurueck (`Winclipper/File.cpp:66-72`)
+### F3 — `File::Delete` returns `false` on success (`Winclipper/File.cpp:66-72`)
 ```cpp
-if (DeleteFileW(name) == 0) { return true; }   // 0 = FEHLER bei DeleteFileW
+if (DeleteFileW(name) == 0) { return true; }   // 0 = FAILURE for DeleteFileW
 return false;
 ```
-Rueckgabe invertiert. Wird aktuell nirgends ausgewertet, ist aber eine Falle — z. B. in
-`SaveClipsAsync` (`ClipsManager.cpp:20`), wo beim Abschalten von "Save to Disk" ungeprueft geloescht wird.
+Return value inverted. Not evaluated anywhere at the time, but a trap — e.g. in `SaveClipsAsync`
+(`ClipsManager.cpp:20`), which deletes unchecked when "Save to Disk" is turned off.
 
-### F4 — `File::DeleteDir`: doppelte NUL-Terminierung fehlt (`Winclipper/File.cpp:74-88`)
-`dirName += L"\0"` haengt nichts an (Operator liest bis zum ersten NUL). `SHFILEOPSTRUCT.pFrom` verlangt eine
-doppelt nullterminierte Liste; `c_str()` liefert nur eine → `SHFileOperation` liest ueber den Puffer hinaus.
-Fix: `dirName.push_back(L'\0')`, `pFrom` auf `dirName.data()` mit explizit zweitem NUL.
+### F4 — `File::DeleteDir`: missing double NUL termination (`Winclipper/File.cpp:74-88`)
+`dirName += L"\0"` appends nothing (the operator reads up to the first NUL). `SHFILEOPSTRUCT.pFrom` requires a
+double-NUL-terminated list; `c_str()` provides only one → `SHFileOperation` reads past the buffer.
+Fix: `dirName.push_back(L'\0')`.
 
-### F5 — Datenrennen im Bitmap-Cache (`Winclipper/OnDemandBitmapManager.cpp:52-57`)
+### F5 — Data races in the bitmap cache (`Winclipper/OnDemandBitmapManager.cpp:52-57`)
 ```cpp
 while (inCriticalSection) { Sleep(10); }
 inCriticalSection = true;
 ```
-Nicht-atomares `bool` als Spinlock; Test und Setzen nicht atomar. Gleiches Muster fuer `clipsWriterWaitCount`
-(`ClipsManager.cpp:5-38`), manipuliert aus einem detachten Thread ohne Synchronisation.
-Fix: `std::mutex` bzw. `std::atomic<int>`.
+A non-atomic `bool` used as a spinlock; test and set are not atomic. Same pattern for `clipsWriterWaitCount`
+(`ClipsManager.cpp:5-38`), modified from a detached thread without synchronization.
 
-Behoben: Bitmap-Cache, `ClipsManager`-/`UserSettings`-Writer, `Clip::pBitmap` und Lade-Merker. Nebenbei behoben:
-Use-after-free durch `c_str()` eines lokalen Strings an detachte `File::Delete`-Threads.
-Ebenfalls behoben:
-- `Clip::EnsureBitmapAsync` übergab dem detachten Thread rohes `this` → jetzt `shared_from_this()` (`7139a8a`).
-- Writer-Thread las `ClipsCollection`, während der UI-Thread sie veränderte → `std::mutex` in `ClipsCollection`,
-  Serialisierung und Datei-I/O auf einer Kopie der `shared_ptr`-Liste außerhalb der Sperre (`bf88a47`).
+Fixed: bitmap cache, `ClipsManager`/`UserSettings` writers, `Clip::pBitmap` and loading flags (`std::mutex`,
+`std::atomic`). Also fixed: a use-after-free from passing `c_str()` of a local string to detached `File::Delete`
+threads.
+- `Clip::EnsureBitmapAsync` passed a raw `this` to the detached thread → now `shared_from_this()` (`7139a8a`).
+- The writer thread read `ClipsCollection` while the UI thread modified it → `std::mutex` in `ClipsCollection`,
+  serialization and file I/O work on a copy of the `shared_ptr` list outside the lock (`bf88a47`).
 
-### F6 — `File::JoinPath` mit leerem String ist UB (`Winclipper/File.cpp:17-31`)
-`retVal.back()` / `retVal2.front()` auf leerem `std::wstring`. Erreichbar, falls `SHGetKnownFolderPath` je einen
-leeren Pfad liefert.
+### F6 — `File::JoinPath` with an empty string is UB (`Winclipper/File.cpp:17-31`)
+`retVal.back()` / `retVal2.front()` on an empty `std::wstring`. Reachable if `SHGetKnownFolderPath` ever returns
+an empty path.
 
-### F7 — Ungültige `settings.dat` bricht jeden Start ab (`Winclipper/UserSettings.cpp`, `Deserialize`)
-`stoi`/`stous` auf Dateiwerte ohne `try`; `1|abc` wirft eine ungefangene Exception beim Start. Jetzt wird der
-Eintrag übersprungen und der Standardwert behalten. Gültige Zahlen begrenzen die Setter ohnehin auf ihren Bereich.
+### F7 — Invalid `settings.dat` aborts every startup (`Winclipper/UserSettings.cpp`, `Deserialize`)
+`stoi`/`stous` on file values without `try`; `1|abc` threw an uncaught exception at startup. Now the entry is
+skipped and the default is kept. The setters clamp valid numbers to their range anyway.
 
-### F8 — Auto-Updater des Originalautors (`Winclipper/Winclipper.cpp`, `RunUpdater`) — schwerwiegend
-Jeder Start rief `StupidSimpleUpdater.exe` (geschlossenes Binary aus `SSUP_merge_*.msm`) auf. Es fragt täglich
-`https://www.carsonshook.com/Winclipper/SSUPUpdateManifest.xml` ab (am 2026-10-10 live). Das Manifest enthält nur
-Version und Download-URL, keinen Hash und keine Signatur. Wer die Domain kontrolliert (Übernahme, Ablauf,
-Kompromittierung), bestimmt die angebotene MSI; die Installation läuft per-machine. Zudem würde der Kanal die
-gehärteten Fork-Builds durch Upstream-MSIs ersetzen. Fix: Aufruf entfernt, Merge-Modul und `SSUPConfig.xml` aus
-beiden Installern entfernt. Der Fork hat keinen Update-Kanal.
+### F8 — The original author's auto-updater (`Winclipper/Winclipper.cpp`, `RunUpdater`) — severe
+Every start launched `StupidSimpleUpdater.exe` (closed-source binary from `SSUP_merge_*.msm`). It polls
+`https://www.carsonshook.com/Winclipper/SSUPUpdateManifest.xml` daily (live on 2026-10-10). The manifest contains
+only a version and a download URL, no hash and no signature. Whoever controls the domain (takeover, expiry,
+compromise) decides which MSI is offered; it installs per-machine. The channel would also replace the hardened fork
+builds with upstream MSIs. Fix: call removed, merge module and `SSUPConfig.xml` removed from both installers.
+The fork has no update channel.
 
-Folgepunkt behoben (`61687cd`): Beide Installer haben einen eigenen `UpgradeCode`, damit keine Upstream-MSI den Fork
-per `MajorUpgrade` ersetzt. Die Upstream-Codes werden per `<Upgrade>` erkannt und Upstream-Installationen jeder
-Version entfernt, damit nicht beide nebeneinander liegen. `Manufacturer` bleibt unverändert.
+Follow-up fixed (`61687cd`): both installers have their own `UpgradeCode`, so no upstream MSI replaces the fork via
+`MajorUpgrade`. The upstream codes are detected via `<Upgrade>`, and upstream installations of any version are
+removed so the two do not coexist. `Manufacturer` is unchanged.
 
-### F9 — Ungeprüfte DIB-Daten aus der Zwischenablage (`Winclipper/ClipsManager.cpp`, `AddToClips`) — schwerwiegend
-Jeder Prozess der Sitzung kann beliebige Bytes als `CF_DIB` in die Zwischenablage legen; Winclipper übernimmt sie
-automatisch. Der Header wurde nicht gegen `GlobalSize` geprüft: `biSizeImage`/`biClrUsed` steuerten ein `memcpy`
-über das Blockende hinaus (Heap-Over-Read), bei Bildgröße 0 lief die Alpha-Schleife bis `0xFFFFFFFF`
-(Heap-Overflow beim Schreiben), negative Breiten und große Maße ließen die Größenberechnung überlaufen. Fix:
-`CopyClipboardDib` prüft jedes Feld gegen die Blockgröße mit denselben Regeln wie `Bitmap::Deserialize`, speichert
-nur einen `BITMAPINFOHEADER` (Masken aus V4/V5-Headern werden übernommen) und fängt `bad_alloc` ab.
+### F9 — Unchecked DIB data from the clipboard (`Winclipper/ClipsManager.cpp`, `AddToClips`) — severe
+Any process in the session can put arbitrary bytes on the clipboard as `CF_DIB`; Winclipper picks them up
+automatically. The header was not checked against `GlobalSize`: `biSizeImage`/`biClrUsed` drove a `memcpy` past
+the end of the block (heap over-read), with an image size of 0 the alpha loop ran up to `0xFFFFFFFF` (heap
+overflow on write), and negative widths and large dimensions overflowed the size calculation. Fix:
+`CopyClipboardDib` checks every field against the block size using the same rules as `Bitmap::Deserialize`, stores
+only a `BITMAPINFOHEADER` (masks from V4/V5 headers are carried over) and catches `bad_alloc`.
 
-### F10 — Unbegrenztes Lesen von `CF_UNICODETEXT` (`Winclipper/ClipsManager.cpp`, `AddToClips`) — mittel
-Der Text wurde bis zur ersten NUL gelesen. Ein Prozess kann unterminierten Text in die Zwischenablage legen, dann
-las Winclipper über das Ende des Blocks hinaus (Over-Read, Absturz oder Fremddaten im Clip). Fix: Länge per
-`wcsnlen` auf `GlobalSize / sizeof(wchar_t)` begrenzt.
+### F10 — Unbounded read of `CF_UNICODETEXT` (`Winclipper/ClipsManager.cpp`, `AddToClips`) — medium
+The text was read up to the first NUL. A process can put unterminated text on the clipboard, and Winclipper then
+read past the end of the block (over-read, crash or foreign data in the clip). Fix: length bounded with `wcsnlen`
+to `GlobalSize / sizeof(wchar_t)`.
 
-### F11 — Rechtsklick-Löschen über Menüposition (`Winclipper/MainWindow.cpp`, `WmMenuRButtonUp`) — mittel
-`WM_MENURBUTTONUP` liefert die Position des Eintrags, nicht seine ID. Die Position zählt auch „More...“,
-Trennlinien, „Clear Clips“ und „Settings“ mit. „Delete“ auf einem solchen Eintrag löschte einen fremden Clip
-oder dereferenzierte das `nullptr` aus `RemoveAt` (Absturz, z. B. bei leerer Liste). Fix: Die Item-ID
-(Clip-Index + 1) wird per `GetMenuItemID` gelesen und gegen die Listengröße geprüft; `DeleteClipAt` prüft auf `nullptr`.
+### F11 — Right-click delete by menu position (`Winclipper/MainWindow.cpp`, `WmMenuRButtonUp`) — medium
+`WM_MENURBUTTONUP` delivers the item's position, not its ID. The position also counts "More...", separators,
+"Clear Clips" and "Settings". "Delete" on such an item deleted an unrelated clip or dereferenced the `nullptr`
+returned by `RemoveAt` (crash, e.g. with an empty list). Fix: the item ID (clip index + 1) is read with
+`GetMenuItemID` and checked against the list size; `DeleteClipAt` checks for `nullptr`.
 
-Rest von `MainWindow.cpp` geprüft, ohne weiteren Sicherheitsbefund. `WM_COMMAND` (z. B. `IDM_EXIT`) kann jeder
-Prozess gleicher Integritätsstufe an das versteckte Fenster senden. Das liegt im Angreifermodell ohnehin vor
-(gleicher Benutzer), UIPI blockt niedrigere Stufen. Nebenbefund, funktional: `DeleteNotificationIcon` setzt
-kein `hWnd`, und `AddNotificationIcon` belegt `uID` mit dem HRESULT von `LoadIconMetric`, sodass das Entfernen
-des Tray-Icons beim Beenden fehlschlägt. Behoben in `55397f8`.
+The rest of `MainWindow.cpp` was reviewed without further security findings. Any process at the same integrity level
+can send `WM_COMMAND` (e.g. `IDM_EXIT`) to the hidden window. That is already covered by the threat model (same
+user); UIPI blocks lower levels. Functional side finding: `DeleteNotificationIcon` set no `hWnd`, and
+`AddNotificationIcon` assigned the HRESULT of `LoadIconMetric` to `uID`, so removing the tray icon on exit failed.
+Fixed in `55397f8`.
 
-### F12 — Stack-Overflow beim Lesen von Registry-Werten (`Winclipper/RegistryUtilities.cpp`) — schwerwiegend
-`AppsUseLightTheme`, `ClipboardHistoryEnabled` und `ClipboardStartupWarningDisabled` übergaben `RegQueryValueExW`
-`cbData = 4096` für ein 4-Byte-`INT32`, ohne den Typ zu prüfen. Ein HKCU-Wert anderen Typs (z. B. `REG_BINARY`
-mit 4 KB) überschrieb den Stack; `ClipboardHistoryEnabled` läuft bei jedem Start. Schreibbar für jeden Prozess
-des Benutzers, also wie die Appdata-Dateien zu behandeln. `ReleaseId` (HKLM) wurde ohne garantierte
-NUL-Terminierung an `stoi` gegeben. Fix: `RegGetValueW` mit `RRF_RT_REG_DWORD`/`RRF_RT_REG_SZ` (prüft Typ, Größe
-und Terminierung). Nebenbei: kein `RegCloseKey` mehr auf ungeöffnete Handles, Schreibschlüssel nur mit
-`KEY_SET_VALUE`.
+### F12 — Stack overflow when reading registry values (`Winclipper/RegistryUtilities.cpp`) — severe
+`AppsUseLightTheme`, `ClipboardHistoryEnabled` and `ClipboardStartupWarningDisabled` passed `cbData = 4096` to
+`RegQueryValueExW` for a 4-byte `INT32` without checking the type. An HKCU value of another type (e.g. a 4 KB
+`REG_BINARY`) overwrote the stack; `ClipboardHistoryEnabled` runs on every start. Writable by any process of the
+user, so to be treated like the appdata files. `ReleaseId` (HKLM) was passed to `stoi` without guaranteed NUL
+termination. Fix: `RegGetValueW` with `RRF_RT_REG_DWORD`/`RRF_RT_REG_SZ` (checks type, size and termination).
+Also: no more `RegCloseKey` on unopened handles, write keys opened with `KEY_SET_VALUE` only.
 
-### F13 — Autostart-Pfad ohne Anführungszeichen (`Winclipper/SettingsWindow.cpp`, `WriteRegistryRun`; `Setup-*/Product.wxs`) — mittel
-Der Run-Wert enthielt den EXE-Pfad ohne Anführungszeichen. Windows zerlegt ihn wie eine Kommandozeile;
-bei `C:\Program Files\Winclipper\Winclipper.exe` wird zuerst `C:\Program.exe` versucht. Ausnutzbar nur, wenn
-dort jemand schreiben kann (normal nur Admins), daher mittel. Der Installer schrieb den Wert genauso. Außerdem
-wurde ein fehlgeschlagenes `RegOpenKeyExW` ignoriert und `sizeof(pPath)` (520 Byte) statt der echten Länge
-geschrieben. Fix: Pfad in Anführungszeichen (Code und beide `.wxs`), Rückgabewerte geprüft, minimale
-Zugriffsrechte. Bestehende Run-Werte werden erst beim nächsten Umschalten in den Einstellungen bzw. bei einer
-Neuinstallation korrigiert.
+### F13 — Unquoted autostart path (`Winclipper/SettingsWindow.cpp`, `WriteRegistryRun`; `Setup-*/Product.wxs`) — medium
+The Run value contained the EXE path without quotes. Windows parses it like a command line; for
+`C:\Program Files\Winclipper\Winclipper.exe` it tries `C:\Program.exe` first. Exploitable only if someone can write
+there (normally only admins), hence medium. The installer wrote the value the same way. In addition, a failed
+`RegOpenKeyExW` was ignored and `sizeof(pPath)` (520 bytes) was written instead of the real length. Fix: quoted
+path (code and both `.wxs`), return values checked, minimal access rights. Existing Run values are only corrected
+the next time the setting is toggled or on reinstall.
 
-### F14 — Ausschlussmarkierungen der Zwischenablage ignoriert (`Winclipper/ClipsManager.cpp`, `AddToClips`) — schwerwiegend
-Passwortmanager markieren kopierte Geheimnisse mit `ExcludeClipboardContentFromMonitorProcessing`,
-`Clipboard Viewer Ignore` oder `CanIncludeInClipboardHistory = 0`. Winclipper prüfte das nicht und speicherte
-Passwörter dauerhaft in `clips.dat`, im Klartext (F2). Fix: `ClipboardContentExcluded` prüft die drei Formate
-bei geöffneter Zwischenablage und überspringt markierte Inhalte. Ein unlesbarer `CanIncludeInClipboardHistory`-
-Wert gilt als Ausschluss.
+### F14 — Clipboard exclusion markers ignored (`Winclipper/ClipsManager.cpp`, `AddToClips`) — severe
+Password managers mark copied secrets with `ExcludeClipboardContentFromMonitorProcessing`,
+`Clipboard Viewer Ignore` or `CanIncludeInClipboardHistory = 0`. Winclipper did not check this and stored passwords
+permanently in `clips.dat`, in plaintext (F2). Fix: `ClipboardContentExcluded` checks the three formats while the
+clipboard is open and skips marked content. An unreadable `CanIncludeInClipboardHistory` value counts as excluded.
 
-Ownership sonst ohne Sicherheitsbefund: `ClipLock` (nicht-atomares `bool`, nur UI-Thread) unterdrückt das
-`WM_CLIPBOARDUPDATE` nach eigenem Setzen. Scheitern alle Versuche in `SetClipboardToClipAtIndex`, bleibt es
-gesetzt und die nächste echte Kopie wird verschluckt (funktional, gering).
+Clipboard ownership otherwise without security findings: `ClipLock` (non-atomic `bool`, UI thread only) suppresses
+the `WM_CLIPBOARDUPDATE` after Winclipper sets the clipboard itself. If all attempts in `SetClipboardToClipAtIndex`
+fail, it stays set and the next real copy is swallowed (functional, minor).
 
-## Nächste Schritte
+## Runtime tests (2026-10-10/11)
 
-1. Upgrade von einer Upstream-Installation auf das Fork-MSI testen (braucht Adminrechte).
-
-## Laufzeittests (2026-10-10)
-
-- Migration (x64 Release): Klartext-`clips.dat` mit Text- und Bildclips plus verwaisten Upstream-Bildern und
-  `-thumb`-Dateien. Erster Test fand eine Lücke: Bilddateien wurden erst beim Laden verschlüsselt, verwaiste nie.
-  Behoben mit `aeff89c` (`OnDemandBitmapManager::ProtectDiskCache` beim Start). Danach beginnen alle Dateien mit
-  `WCDPAPI1`, keine `-thumb`-Dateien, alte Clips bleiben erhalten, neue Text-/Bildkopien landen verschlüsselt.
-  Grenze: Überschreiben an Ort und Stelle löscht alte Klartextblöcke auf der Platte nicht sicher.
-- Installer: Beide MSIs mit `candle`/`light` aus dem WiX-3.11-NuGet-Paket gebaut. Upgrade-Tabelle geprüft:
-  eigener `UpgradeCode`, Upstream-Code (x64 `34e3392e…`, x86 `a332e06b…`) wird entfernt, Run-Wert in Anführungszeichen.
+- Migration (x64 Release): plaintext `clips.dat` with text and image clips plus orphaned upstream images and
+  `-thumb` files. The first test found a gap: image files were only encrypted when loaded, orphaned ones never.
+  Fixed with `aeff89c` (`OnDemandBitmapManager::ProtectDiskCache` at startup). Afterwards all files start with
+  `WCDPAPI1`, no `-thumb` files remain, old clips are kept, and new text/image copies are stored encrypted.
+- Installer: upgrade from an upstream installation tested by the project owner — only one Winclipper installation
+  remains. The WiX 7 MSIs were installed over the existing version; "Launch Winclipper" works. MSI tables checked:
+  own `UpgradeCode`, upstream code (x64 `34e3392e…`, x86 `a332e06b…`) is removed, Run value quoted.

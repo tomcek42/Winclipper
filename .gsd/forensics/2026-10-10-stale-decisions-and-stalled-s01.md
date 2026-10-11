@@ -1,52 +1,51 @@
-# Forensik 2026-10-10 — überholte Entscheidungen im Memory, S01 steht seit 13.09.
+# Forensics 2026-10-10 — stale decisions in memory, S01 stalled since 2026-09-13
 
 ## Symptom
 
-Kein Absturz. Beobachtet:
-- `STATE.md`: `**Phase:** evaluating-gates` / „Evaluate 2 quality gate(s) for S01 before execution." — unverändert seit 2026-09-13.
-- Das in die Sitzung injizierte Projekt-Memory enthält gleichzeitig
-  „Use retargeting instead of permanent project edits" (D004) **und**
-  „Pin project files to current toolset with static CRT" (D006), sowie
-  „Keep the Controls include path under active review during upstream merges" (D005) **und**
-  „Controls include path is project-relative … no recurring merge check needed" (D007).
+No crash. Observed:
+- `STATE.md`: `**Phase:** evaluating-gates` / "Evaluate 2 quality gate(s) for S01 before execution." — unchanged since 2026-09-13.
+- The project memory injected into the session contains both
+  "Use retargeting instead of permanent project edits" (D004) **and**
+  "Pin project files to current toolset with static CRT" (D006), as well as
+  "Keep the Controls include path under active review during upstream merges" (D005) **and**
+  "Controls include path is project-relative … no recurring merge check needed" (D007).
 
 ## Evidence Trail
 
-1. `.gsd/auto.lock` — nicht vorhanden; `.gsd/activity/`, `.gsd/journal/`, `.gsd/metrics.json` — nicht vorhanden. Auto-Mode ist in diesem Projekt nie gelaufen; es gibt keinen Crash und keinen Stuck-Loop.
-2. `.gsd/event-log.jsonl:1-8` / `.gsd/audit/events.jsonl` — nur `plan-milestone`/`plan-slice` (M001, S01–S04, M002, M003, M002/S01), alle Session `e97f225c…`, 2026-09-13 14:31–14:32. Kein Gate-, Task- oder Execute-Event danach.
+1. `.gsd/auto.lock` — absent; `.gsd/activity/`, `.gsd/journal/`, `.gsd/metrics.json` — absent. Auto mode never ran in this project; there is no crash and no stuck loop.
+2. `.gsd/event-log.jsonl:1-8` / `.gsd/audit/events.jsonl` — only `plan-milestone`/`plan-slice` (M001, S01–S04, M002, M003, M002/S01), all session `e97f225c…`, 2026-09-13 14:31–14:32. No gate, task or execute event afterwards.
 3. `.gsd/state.json` `next.command = "/gsd auto"`, `updated_at = 2026-09-13T14:32:54Z`; `.gsd/runtime/write-gate-state.json` `pendingGateId: null`, `verifiedApprovalGates: []`.
-4. `.gsd/DECISIONS.md:12-15` — D006 „(amends D004)", D007 „(amends D005)": die Ablösung steht nur im Titeltext. D004/D005 sind nicht als superseded markiert und bleiben aktiv.
-5. `git log` — `7f09f69` (v145/statische CRT fest eingetragen) und `8a6ed15` (Include-Pfad) setzen D006/D007 um; D004 („without permanently changing project files") widerspricht dem Ist-Stand.
-6. `.gsd/phases/0{1,2,3}-*/` (gerendert, in `.compat.json` geführt) vs. `phases/M00{1,2,3}-*/` im Repo-Root (getrackt, `abe88f0`) — zwei parallele Planungsbäume mit unterschiedlicher Benennung.
-7. `.gsd/quarantine/projections/` — 13 Einträge. 12 davon 2026-09-13 14:31–14:32 während des Planungs-Bursts (REQUIREMENTS/STATE/ROADMAP/QUEUE, Diff nur `Phase: planning → evaluating-gates`), einer 2026-10-10T08:09 (`KNOWLEDGE.md`, leere Patterns/Lessons-Tabellen). Inhalt unkritisch.
+4. `.gsd/DECISIONS.md:12-15` — D006 "(amends D004)", D007 "(amends D005)": the supersession appears only in the title text. D004/D005 are not marked as superseded and remain active.
+5. `git log` — `7f09f69` (v145/static CRT pinned) and `8a6ed15` (include path) implement D006/D007; D004 ("without permanently changing project files") contradicts the current state.
+6. `.gsd/phases/0{1,2,3}-*/` (rendered, tracked in `.compat.json`) vs. `phases/M00{1,2,3}-*/` in the repo root (tracked, `abe88f0`) — two parallel planning trees with different naming.
+7. `.gsd/quarantine/projections/` — 13 entries. 12 of them 2026-09-13 14:31–14:32 during the planning burst (REQUIREMENTS/STATE/ROADMAP/QUEUE, diff only `Phase: planning → evaluating-gates`), one at 2026-10-10T08:09 (`KNOWLEDGE.md`, empty Patterns/Lessons tables). Content uncritical.
 
 ## Root Cause
 
-**Hauptbefund (fachlich relevant):** D006/D007 wurden per `gsd_decision_save` ohne `supersedes`-Feld angelegt; „amends D00x" steht nur im Freitext. Die Memory-Injektion filtert superseded Entscheidungen, sieht hier aber vier aktive und liefert widersprüchliche Build-Vorgaben. Ein Agent, der D004 folgt, könnte die Toolset-/CRT-Festlegung aus `7f09f69` wieder entfernen oder `-p:PlatformToolset=…`-Retargeting erneut einführen.
+**Main finding (functionally relevant):** D006/D007 were created with `gsd_decision_save` without the `supersedes` field; "amends D00x" is only free text. The memory injection filters superseded decisions, but sees four active ones here and delivers contradictory build guidance. An agent following D004 could remove the toolset/CRT pinning from `7f09f69` or reintroduce `-p:PlatformToolset=…` retargeting.
 
-**Nebenbefund:** S01 wartet auf zwei Quality-Gates, die nie ausgewertet wurden. Kein Fehler — der Workflow wurde nach dem Planning nicht fortgesetzt; die Sicherheitsfixes (z. B. F3, `3daeee5`) laufen außerhalb von GSD und werden in Tasks/Slices nicht erfasst.
+**Side finding:** S01 is waiting on two quality gates that were never evaluated. Not a defect — the workflow was not continued after planning; the security fixes (e.g. F3, `3daeee5`) happen outside GSD and are not tracked in tasks/slices.
 
-**Nebenbefund:** Root-`phases/` ist ein manuell/früher geschriebener Planungsbaum, `.gsd/phases/` die DB-Projektion. `CODEBASE.md` listet nur den Root-Baum; welcher maßgeblich ist, ist nicht dokumentiert.
+**Side finding:** the root `phases/` is a manually/earlier written planning tree, `.gsd/phases/` is the DB projection. `CODEBASE.md` lists only the root tree; which one is authoritative is not documented.
 
 ## Proposed Fix
 
-1. D004 durch D006 und D005 durch D007 formal ablösen: `gsd_decision_save` mit `supersedes: "D004"` bzw. `"D005"` (ggf. D006/D007 neu anlegen, da `supersedes` nachträglich nicht setzbar ist). Danach prüfen, dass `gsd_decision_list` ohne `includeSuperseded` nur noch D006/D007 liefert.
-2. Entscheiden: S01 über GSD fortführen (Gates auswerten, F3 als Task nachtragen) oder M001 parken (`gsd_milestone_park`), damit `STATE.md` nicht dauerhaft „evaluating-gates" meldet.
-3. Root-`phases/` entweder löschen (DB ist Quelle) oder in `CLAUDE.md` als historisch kennzeichnen.
+1. Formally supersede D004 with D006 and D005 with D007: `gsd_decision_save` with `supersedes: "D004"` or `"D005"` (possibly recreate D006/D007, since `supersedes` cannot be set afterwards). Then check that `gsd_decision_list` without `includeSuperseded` returns only D006/D007.
+2. Decide: continue S01 through GSD (evaluate the gates, add F3 as a task) or park M001 (`gsd_milestone_park`) so that `STATE.md` does not report "evaluating-gates" forever.
+3. Either delete the root `phases/` (the DB is the source) or mark it as historical in `CLAUDE.md`.
 
 ## Test
 
-`gsd_decision_list` (Default) darf keine zwei aktiven Entscheidungen mit gleichem Scope `build` und widersprechender Choice liefern. Werkzeugseitig wäre eine Warnung sinnvoll, wenn ein Decision-Titel „amends/replaces Dxxx" enthält, aber `supersedes` leer ist.
+`gsd_decision_list` (default) must not return two active decisions with the same scope `build` and contradicting choices. On the tool side, a warning would help when a decision title contains "amends/replaces Dxxx" but `supersedes` is empty.
 
 ## Confidence
 
-Hoch für Befund 1 (direkt in `DECISIONS.md` und im injizierten Memory sichtbar). Mittel für Befund 2/3 — ob ein Weiterführen über GSD überhaupt gewollt ist, ist eine Nutzerentscheidung, kein Defekt.
+High for finding 1 (directly visible in `DECISIONS.md` and in the injected memory). Medium for findings 2/3 — whether continuing through GSD is wanted at all is a user decision, not a defect.
 
-## Korrektur (2026-10-10, später)
+## Correction (2026-10-10, later)
 
-Der Hauptbefund war falsch. `gsd_decision_save` mit `supersedes: D004` bzw. `D005` lehnt ab:
-"Cannot supersede D004: it is already superseded by D006" (analog D005/D007). Die Ablösung ist
-in der Datenbank also korrekt erfasst. `DECISIONS.md` ist ein Append-only-Register und listet
-abgelöste Zeilen absichtlich weiter. Offen bleibt nur, dass die `gsd-memory`-Injektion D004/D005
-weiterhin als "Architecture"-Memory einspielt — das ist ein Verhalten von GSD, nicht ein Fehler
-im Projekt.
+The main finding was wrong. `gsd_decision_save` with `supersedes: D004` or `D005` refuses:
+"Cannot supersede D004: it is already superseded by D006" (likewise D005/D007). The supersession is
+therefore recorded correctly in the database. `DECISIONS.md` is an append-only register and lists
+superseded rows on purpose. The only remaining issue is that the `gsd-memory` injection still feeds
+D004/D005 in as "Architecture" memory — that is GSD behavior, not a defect in the project.

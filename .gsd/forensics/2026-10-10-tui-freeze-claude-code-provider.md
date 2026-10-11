@@ -20,8 +20,8 @@ injection, written in the same millisecond — and **nothing after it** (no assi
 
 | Session file (`~/.gsd/sessions/<project>/…`) | Last records | Next session |
 |---|---|---|
-| `Winclipper/2026-10-10T08-09-23-574Z_…jsonl` (15 lines) | `user` 08:14:18.023 "Ja, gehe so vor." → `custom_message/gsd-memory` 08:14:18.023 | 08:22:11 |
-| `Winclipper/2026-10-10T08-22-11-002Z_…jsonl` (38 lines) | `user` 08:38:33.648 "Ja, führe die Schritte 1 und 2 aus." → `gsd-memory` 08:38:33.648 | 08:55:47 |
+| `Winclipper/2026-10-10T08-09-23-574Z_…jsonl` (15 lines) | `user` 08:14:18.023 "Yes, proceed that way." → `custom_message/gsd-memory` 08:14:18.023 | 08:22:11 |
+| `Winclipper/2026-10-10T08-22-11-002Z_…jsonl` (38 lines) | `user` 08:38:33.648 "Yes, carry out steps 1 and 2." → `gsd-memory` 08:38:33.648 | 08:55:47 |
 | `VirtualCopyPaste/2026-10-05T19-31-28-397Z_…jsonl` (43 lines) | `user` 20:10:18.860 (commit + release request) → `gsd-memory` 20:10:18.861 | — |
 | `VirtualCopyPaste/2026-10-06T04-40-10-388Z_…jsonl` (55 lines) | assistant 18:48:32 `stopReason: aborted` "Claude Code stream aborted by caller" → `user` 18:48:53 → `gsd-memory` 18:48:53 | 19:08:34 |
 
