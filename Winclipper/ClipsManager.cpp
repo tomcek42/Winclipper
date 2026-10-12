@@ -580,6 +580,16 @@ std::shared_ptr<Clip> ClipsManager::GetClipAt(unsigned int index)
 
 void ClipsManager::ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit)
 {
+	// TrackPopupMenu runs a nested message loop, so a hotkey or tray click
+	// while the menu is open would open a second menu on top of it.
+	static bool menuOpen = false;
+	if (menuOpen)
+	{
+		return;
+	}
+	menuOpen = true;
+	struct ResetFlag { ~ResetFlag() { menuOpen = false; } } resetFlag;
+
     HWND curWin = GetForegroundWindow();
 	HWND taskbarWnd = FindWindow(L"Shell_TrayWnd", nullptr);
 	HWND child = GetWindow(curWin, GW_CHILD);
@@ -588,11 +598,13 @@ void ClipsManager::ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit)
 	// when the user tries to paste using the shell_notifyicon.
 	if (curWin == taskbarWnd || IsChild(taskbarWnd, curWin))
 	{
-		curWin = taskbarWnd; // just in case isChild instead of equal.
-		do
+		// GetWindow returns nullptr at the end of the z-order; the old
+		// do/while looped forever there and froze the UI thread.
+		curWin = GetWindow(taskbarWnd, GW_HWNDNEXT);
+		while (curWin != nullptr && !IsWindowVisible(curWin))
 		{
 			curWin = GetWindow(curWin, GW_HWNDNEXT);
-		} while (!IsWindowVisible(curWin));
+		}
 	}
 	else if (child != nullptr)
 	{
@@ -606,10 +618,15 @@ void ClipsManager::ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit)
 			child = FindWindowExW(curWin, nullptr, L"Windows.UI.Core.CoreWindow", L"Microsoft Edge");
 			if (child != nullptr)
 			{
-				do
+				HWND next = GetWindow(curWin, GW_CHILD);
+				while (next != nullptr && !IsWindowVisible(next))
 				{
-					curWin = GetWindow(curWin, GW_CHILD);
-				} while (!IsWindowVisible(curWin));
+					next = GetWindow(next, GW_CHILD);
+				}
+				if (next != nullptr)
+				{
+					curWin = next;
+				}
 			}
 		}
 	}
@@ -624,6 +641,10 @@ void ClipsManager::ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit)
         // to restore the active window (the text field) after the foreground window activated.
         AttachThreadInput(GetWindowThreadProcessId(curWin, nullptr), GetWindowThreadProcessId(hWnd, nullptr), true);
 		HWND actWin = GetActiveWindow();
+
+		// Do not stay attached while the menu is open: with a shared input
+		// queue a busy or hung foreground app stalls the menu's mouse input.
+		AttachThreadInput(GetWindowThreadProcessId(curWin, nullptr), GetWindowThreadProcessId(hWnd, nullptr), false);
 
         SetForegroundWindow(hWnd);
 
@@ -725,6 +746,9 @@ void ClipsManager::ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit)
 		// apparently this line is needed to ensure
 		// consistent popup menu behavior.
 		PostMessageW(hWnd, WM_USER, 0, 0);
+
+		// Re-attach so focus can be handed back to the previous window.
+		AttachThreadInput(GetWindowThreadProcessId(curWin, nullptr), GetWindowThreadProcessId(hWnd, nullptr), true);
         switch (menuSelection)
         {
 		case CANCELED_SELECTION:

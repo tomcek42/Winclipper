@@ -520,8 +520,13 @@ LRESULT MainWindow::WmClipboardUpdate(HWND hWnd, WPARAM wParam, LPARAM lParam)
 		while (!success && retries > 0)
 		{
 			success = cManager->AddToClips(hWnd);
-			Sleep(100);
 			retries--;
+			if (!success && retries > 0)
+			{
+				// Only wait when another program still holds the clipboard;
+				// sleeping unconditionally blocked the UI on every copy.
+				Sleep(100);
+			}
 		}
 	}
 	else
