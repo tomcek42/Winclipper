@@ -2,6 +2,8 @@
 #include "SettingsWindow.h"
 #include <commdlg.h>
 #pragma comment(lib, "Comdlg32.lib")
+#include <dwmapi.h>
+#pragma comment(lib, "Dwmapi.lib")
 
 
 ATOM SettingsWindow::RegisterSettingsWindowClass(HINSTANCE hInstance)
@@ -155,6 +157,9 @@ LRESULT SettingsWindow::SettingsWndProc(HWND hWnd, UINT message, WPARAM wParam, 
 	case WM_CTLCOLOREDIT:
 	case WM_CTLCOLORLISTBOX:
 		lResult = pThis->WmCtlColorEdit(hWnd, wParam, lParam);
+		break;
+	case WM_DRAWITEM:
+		lResult = pThis->WmDrawItem(hWnd, wParam, lParam);
 		break;
 	case WM_NOTIFY:
 		lResult = pThis->WmNotify(hWnd, wParam, lParam);
@@ -477,6 +482,10 @@ LRESULT SettingsWindow::WmCtlColorStatic(HWND hWnd, WPARAM wParam, LPARAM lParam
 
 LRESULT SettingsWindow::WmCtlColorEdit(HWND hWnd, WPARAM wParam, LPARAM lParam)
 {
+	if (reinterpret_cast<HWND>(lParam) == navigationList)
+	{
+		return reinterpret_cast<LRESULT>(hbrSidebar);
+	}
 	HDC hdcStatic = (HDC)wParam;
 	SetBkMode(hdcStatic, TRANSPARENT);
 	if (useLightTheme)
@@ -559,11 +568,16 @@ SettingsWindow::SettingsWindow(HINSTANCE hInstance)
 	hfDefault.cbSize = sizeof(NONCLIENTMETRICS);
 	SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(NONCLIENTMETRICS), &hfDefault, 0);
 	hFontStd = CreateFontIndirectW(&hfDefault.lfMessageFont);
+	LOGFONTW heading = hfDefault.lfMessageFont;
+	heading.lfHeight = heading.lfHeight * 5 / 3;
+	heading.lfWeight = FW_SEMIBOLD;
+	hFontHeading = CreateFontIndirectW(&heading);
 
 	LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
 	LoadStringW(hInstance, IDC_WINCSETTINGS, szSettingsWindowClass, MAX_LOADSTRING);
 
 	RegisterSettingsWindowClass(hInstance);
+	hbrSidebar = CreateSolidBrush(useLightTheme ? RGB(243, 243, 243) : RGB(26, 26, 26));
 
 	InitSettingsWindow(hInstance);
 }
@@ -611,6 +625,78 @@ HWND SettingsWindow::AddButton(int x, int y, int width, LPCWSTR text, UINT_PTR i
 		ScaleX(x), ScaleY(y), ScaleX(width), ScaleY(24), windowHandle, reinterpret_cast<HMENU>(id), hInstance, nullptr);
 	SendMessageW(button, WM_SETFONT, reinterpret_cast<WPARAM>(hFontStd), FALSE);
 	return button;
+}
+
+HWND SettingsWindow::AddHeading(int x, LPCWSTR text, HINSTANCE hInstance)
+{
+	HWND heading = AddText(x, 14, 300, 30, text, IDC_STATIC, hInstance);
+	SendMessageW(heading, WM_SETFONT, reinterpret_cast<WPARAM>(hFontHeading), FALSE);
+	return heading;
+}
+
+// Rounded corners on Windows 11 and a dark title bar when apps use the dark theme.
+// Older Windows versions ignore both attributes.
+void SettingsWindow::ApplyWindowStyle(HWND hWnd)
+{
+	const BOOL dark = useLightTheme ? FALSE : TRUE;
+	DwmSetWindowAttribute(hWnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
+	const int corners = 2 /* DWMWCP_ROUND */;
+	DwmSetWindowAttribute(hWnd, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, &corners, sizeof(corners));
+}
+
+COLORREF SettingsWindow::AccentColor()
+{
+	DWORD colorization = 0;
+	BOOL opaque = FALSE;
+	if (SUCCEEDED(DwmGetColorizationColor(&colorization, &opaque)))
+	{
+		return RGB((colorization >> 16) & 0xFF, (colorization >> 8) & 0xFF, colorization & 0xFF);
+	}
+	return RGB(0, 103, 192);
+}
+
+// Draws a navigation entry: a rounded highlight with an accent bar for the selected page.
+LRESULT SettingsWindow::WmDrawItem(HWND hWnd, WPARAM wParam, LPARAM lParam)
+{
+	const DRAWITEMSTRUCT * item = reinterpret_cast<const DRAWITEMSTRUCT *>(lParam);
+	if (item->CtlID != LST_NAVIGATION || item->itemID == static_cast<UINT>(-1))
+	{
+		return FALSE;
+	}
+	HDC dc = item->hDC;
+	RECT rect = item->rcItem;
+	FillRect(dc, &rect, hbrSidebar);
+
+	if (item->itemState & ODS_SELECTED)
+	{
+		const RECT pill = { rect.left + ScaleX(6), rect.top + ScaleY(3), rect.right - ScaleX(6), rect.bottom - ScaleY(3) };
+		HBRUSH pillBrush = CreateSolidBrush(useLightTheme ? RGB(228, 228, 228) : RGB(50, 50, 50));
+		HBRUSH accentBrush = CreateSolidBrush(AccentColor());
+		HPEN oldPen = static_cast<HPEN>(SelectObject(dc, GetStockObject(NULL_PEN)));
+		HBRUSH oldBrush = static_cast<HBRUSH>(SelectObject(dc, pillBrush));
+		RoundRect(dc, pill.left, pill.top, pill.right, pill.bottom, ScaleX(8), ScaleY(8));
+		SelectObject(dc, accentBrush);
+		const int barHeight = ScaleY(16);
+		const int barTop = (pill.top + pill.bottom - barHeight) / 2;
+		RoundRect(dc, pill.left, barTop, pill.left + ScaleX(3), barTop + barHeight, ScaleX(3), ScaleY(3));
+		SelectObject(dc, oldBrush);
+		SelectObject(dc, oldPen);
+		DeleteObject(accentBrush);
+		DeleteObject(pillBrush);
+	}
+
+	wchar_t text[64] = L"";
+	if (SendMessageW(item->hwndItem, LB_GETTEXTLEN, item->itemID, 0) < 64)
+	{
+		SendMessageW(item->hwndItem, LB_GETTEXT, item->itemID, reinterpret_cast<LPARAM>(text));
+	}
+	SetBkMode(dc, TRANSPARENT);
+	SetTextColor(dc, useLightTheme ? FOREGROUND_COLOR_LIGHT : FOREGROUND_COLOR_DARK);
+	HFONT oldFont = static_cast<HFONT>(SelectObject(dc, hFontStd));
+	rect.left += ScaleX(20);
+	DrawTextW(dc, text, -1, &rect, DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX);
+	SelectObject(dc, oldFont);
+	return TRUE;
 }
 
 HWND SettingsWindow::AddText(int x, int y, int width, int height, LPCWSTR text, UINT_PTR id, HINSTANCE hInstance)
@@ -714,7 +800,7 @@ LRESULT SettingsWindow::WmNotify(HWND hWnd, WPARAM wParam, LPARAM lParam)
 bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 {
 	HWND hWnd = CreateWindowExW(0, szSettingsWindowClass, szTitle, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
-		CW_USEDEFAULT, CW_USEDEFAULT, ScaleX(440), ScaleY(360), nullptr, nullptr, hInstance, this);
+		CW_USEDEFAULT, CW_USEDEFAULT, ScaleX(500), ScaleY(420), nullptr, nullptr, hInstance, this);
 
 	if (!hWnd)
 	{
@@ -726,31 +812,38 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	windowHandle = hWnd;
 
 	// Vertical tabs: a list on the left, one page of controls on the right.
+	ApplyWindowStyle(hWnd);
+
+	// Owner-drawn and borderless, so it reads as a sidebar rather than a list box.
+	RECT client;
+	GetClientRect(hWnd, &client);
 	navigationList = CreateWindowExW(0, WC_LISTBOX, nullptr,
-		WS_CHILD | WS_VISIBLE | WS_TABSTOP | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT,
-		ScaleX(10), ScaleY(10), ScaleX(100), ScaleY(300), hWnd, reinterpret_cast<HMENU>(LST_NAVIGATION), hInstance, nullptr);
+		WS_CHILD | WS_VISIBLE | WS_TABSTOP | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT | LBS_OWNERDRAWFIXED | LBS_HASSTRINGS,
+		0, 0, ScaleX(SIDEBAR_WIDTH), client.bottom, hWnd, reinterpret_cast<HMENU>(LST_NAVIGATION), hInstance, nullptr);
 	SendMessageW(navigationList, WM_SETFONT, reinterpret_cast<WPARAM>(hFontStd), FALSE);
-	SendMessageW(navigationList, LB_SETITEMHEIGHT, 0, ScaleY(26));
+	SendMessageW(navigationList, LB_SETITEMHEIGHT, 0, ScaleY(36));
 	for (LPCWSTR name : { L"General", L"Clips", L"Images", L"Updates", L"About" })
 	{
 		SendMessageW(navigationList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name));
 	}
 
-	const int left = 125;
+	const int left = SIDEBAR_WIDTH + 24;
+	const int top = 52;
 
 	// General
+	AddHeading(left, L"General", hInstance);
 	LabelShowClipsHotkey = Controls::Label(hWnd, LBL_SHOW_CLIPS_HOTK, hInstance);
 	LabelShowClipsHotkey.SuspendLayout();
 	LabelShowClipsHotkey.SetX(left);
-	LabelShowClipsHotkey.SetY(12);
+	LabelShowClipsHotkey.SetY(top + 12);
 	LabelShowClipsHotkey.SetText(L"Clips menu shortcut:");
 	LabelShowClipsHotkey.ResumeLayout();
-	HWND hHotKey = AddHotkeyCtrl(hWnd, hFontStd, left + 120, 10, 150, 20, hInstance, HKY_SHOW_CLIPS_MENU);
+	HWND hHotKey = AddHotkeyCtrl(hWnd, hFontStd, left + 140, top + 10, 150, 20, hInstance, HKY_SHOW_CLIPS_MENU);
 
 	CheckboxRunAtStartup = Controls::Checkbox(hWnd, CHK_RUN_AT_STARTUP, hInstance);
 	CheckboxRunAtStartup.SuspendLayout();
 	CheckboxRunAtStartup.SetX(left);
-	CheckboxRunAtStartup.SetY(44);
+	CheckboxRunAtStartup.SetY(top + 44);
 	CheckboxRunAtStartup.SetText(L"Run Winclipper at startup");
 	CheckboxRunAtStartup.UseBasicTheme = !useLightTheme;
 	CheckboxRunAtStartup.ResumeLayout();
@@ -758,7 +851,7 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	CheckboxPasteOnClick = Controls::Checkbox(hWnd, CHK_PASTE_ON_CLICK, hInstance);
 	CheckboxPasteOnClick.SuspendLayout();
 	CheckboxPasteOnClick.SetX(left);
-	CheckboxPasteOnClick.SetY(68);
+	CheckboxPasteOnClick.SetY(top + 68);
 	CheckboxPasteOnClick.SetText(L"Paste immediately on click");
 	CheckboxPasteOnClick.UseBasicTheme = !useLightTheme;
 	CheckboxPasteOnClick.ResumeLayout();
@@ -766,7 +859,7 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	CheckboxSelectSecondClip = Controls::Checkbox(hWnd, CHK_SLCT_2ND_CLIP, hInstance);
 	CheckboxSelectSecondClip.SuspendLayout();
 	CheckboxSelectSecondClip.SetX(left);
-	CheckboxSelectSecondClip.SetY(92);
+	CheckboxSelectSecondClip.SetY(top + 92);
 	CheckboxSelectSecondClip.SetText(L"Auto-select second clip");
 	CheckboxSelectSecondClip.UseBasicTheme = !useLightTheme;
 	CheckboxSelectSecondClip.ResumeLayout();
@@ -774,24 +867,25 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	CheckboxShowPreview = Controls::Checkbox(hWnd, CHK_SHOW_PREVIEW, hInstance);
 	CheckboxShowPreview.SuspendLayout();
 	CheckboxShowPreview.SetX(left);
-	CheckboxShowPreview.SetY(116);
+	CheckboxShowPreview.SetY(top + 116);
 	CheckboxShowPreview.SetText(L"Show clip preview");
 	CheckboxShowPreview.UseBasicTheme = !useLightTheme;
 	CheckboxShowPreview.ResumeLayout();
 	AssignNewControlsToPage(PAGE_GENERAL);
 
 	// Clips
+	AddHeading(left, L"Clips", hInstance);
 	LabelMaxClipsDisplay = Controls::Label(hWnd, LBL_MAX_CLIPS_DISPLAY, hInstance);
 	LabelMaxClipsDisplay.SuspendLayout();
 	LabelMaxClipsDisplay.SetX(left);
-	LabelMaxClipsDisplay.SetY(12);
+	LabelMaxClipsDisplay.SetY(top + 12);
 	LabelMaxClipsDisplay.SetText(L"Number of clips to display:");
 	LabelMaxClipsDisplay.ResumeLayout();
 
 	SpinnerMaxClipsDisplay = Controls::Spinner(hWnd, TXT_MAX_CLIPS_DISPLAY, UD_MAX_CLIPS_DISPLAY, hInstance);
 	SpinnerMaxClipsDisplay.SuspendLayout();
-	SpinnerMaxClipsDisplay.SetX(left + 180);
-	SpinnerMaxClipsDisplay.SetY(10);
+	SpinnerMaxClipsDisplay.SetX(left + 200);
+	SpinnerMaxClipsDisplay.SetY(top + 10);
 	SpinnerMaxClipsDisplay.SetMinValue(UserSettings::MAX_DISPLAY_LOWER);
 	SpinnerMaxClipsDisplay.SetMaxValue(UserSettings::MAX_DISPLAY_UPPER);
 	SpinnerMaxClipsDisplay.ResumeLayout();
@@ -799,14 +893,14 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	LabelMaxClipsSaved = Controls::Label(hWnd, LBL_MAX_CLIPS_SAVED, hInstance);
 	LabelMaxClipsSaved.SuspendLayout();
 	LabelMaxClipsSaved.SetX(left);
-	LabelMaxClipsSaved.SetY(42);
+	LabelMaxClipsSaved.SetY(top + 42);
 	LabelMaxClipsSaved.SetText(L"Maximum clips to save:");
 	LabelMaxClipsSaved.ResumeLayout();
 
 	SpinnerMaxClipsSaved = Controls::Spinner(hWnd, TXT_MAX_CLIPS_SAVED, UD_MAX_CLIPS_SAVED, hInstance);
 	SpinnerMaxClipsSaved.SuspendLayout();
-	SpinnerMaxClipsSaved.SetX(left + 180);
-	SpinnerMaxClipsSaved.SetY(40);
+	SpinnerMaxClipsSaved.SetX(left + 200);
+	SpinnerMaxClipsSaved.SetY(top + 40);
 	SpinnerMaxClipsSaved.SetMinValue(UserSettings::MAX_SAVED_LOWER);
 	SpinnerMaxClipsSaved.SetMaxValue(UserSettings::MAX_SAVED_UPPER);
 	SpinnerMaxClipsSaved.ResumeLayout();
@@ -814,14 +908,14 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	LabelMenuDisplayChars = Controls::Label(hWnd, LBL_MENU_DISP_CHARS, hInstance);
 	LabelMenuDisplayChars.SuspendLayout();
 	LabelMenuDisplayChars.SetX(left);
-	LabelMenuDisplayChars.SetY(72);
+	LabelMenuDisplayChars.SetY(top + 72);
 	LabelMenuDisplayChars.SetText(L"Number of preview characters:");
 	LabelMenuDisplayChars.ResumeLayout();
 
 	SpinnerMenuDisplayChars = Controls::Spinner(hWnd, TXT_MENU_DISP_CHARS, UD_MENU_DISP_CHARS, hInstance);
 	SpinnerMenuDisplayChars.SuspendLayout();
-	SpinnerMenuDisplayChars.SetX(left + 180);
-	SpinnerMenuDisplayChars.SetY(70);
+	SpinnerMenuDisplayChars.SetX(left + 200);
+	SpinnerMenuDisplayChars.SetY(top + 70);
 	SpinnerMenuDisplayChars.SetMinValue(UserSettings::MENU_CHARS_LOWER);
 	SpinnerMenuDisplayChars.SetMaxValue(UserSettings::MENU_CHARS_UPPER);
 	SpinnerMenuDisplayChars.ResumeLayout();
@@ -829,28 +923,29 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	CheckboxSaveToDisk = Controls::Checkbox(hWnd, CHK_SAVE_TO_DISK, hInstance);
 	CheckboxSaveToDisk.SuspendLayout();
 	CheckboxSaveToDisk.SetX(left);
-	CheckboxSaveToDisk.SetY(102);
+	CheckboxSaveToDisk.SetY(top + 102);
 	CheckboxSaveToDisk.SetText(L"Save clips to disk");
 	CheckboxSaveToDisk.UseBasicTheme = !useLightTheme;
 	CheckboxSaveToDisk.ResumeLayout();
 
-	AddButton(left, 128, 110, L"&Clear clips", BTN_CLEAR_CLIPS, hInstance);
+	AddButton(left, top + 128, 110, L"&Clear clips", BTN_CLEAR_CLIPS, hInstance);
 
-	AddText(left, 166, 280, 32, L"Keep content marked as private (e.g. passwords) when it comes from these programs:",
+	AddText(left, top + 166, 280, 32, L"Keep content marked as private (e.g. passwords) when it comes from these programs:",
 		LBL_PRIVATE_ALLOWED, hInstance);
 	privateAllowedList = CreateWindowExW(WS_EX_CLIENTEDGE, WC_LISTBOX, nullptr,
 		WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | LBS_NOTIFY | LBS_SORT | LBS_NOINTEGRALHEIGHT,
-		ScaleX(left), ScaleY(200), ScaleX(180), ScaleY(80), hWnd, reinterpret_cast<HMENU>(LST_PRIVATE_ALLOWED), hInstance, nullptr);
+		ScaleX(left), ScaleY(top + 200), ScaleX(180), ScaleY(80), hWnd, reinterpret_cast<HMENU>(LST_PRIVATE_ALLOWED), hInstance, nullptr);
 	SendMessageW(privateAllowedList, WM_SETFONT, reinterpret_cast<WPARAM>(hFontStd), FALSE);
-	AddButton(left + 190, 200, 90, L"&Add...", BTN_ADD_PRIVATE, hInstance);
-	AddButton(left + 190, 230, 90, L"&Remove", BTN_REMOVE_PRIVATE, hInstance);
+	AddButton(left + 190, top + 200, 90, L"&Add...", BTN_ADD_PRIVATE, hInstance);
+	AddButton(left + 190, top + 230, 90, L"&Remove", BTN_REMOVE_PRIVATE, hInstance);
 	AssignNewControlsToPage(PAGE_CLIPS);
 
 	// Images
+	AddHeading(left, L"Images", hInstance);
 	CheckboxSaveImages = Controls::Checkbox(hWnd, CHK_SAVE_IMAGES, hInstance);
 	CheckboxSaveImages.SuspendLayout();
 	CheckboxSaveImages.SetX(left);
-	CheckboxSaveImages.SetY(12);
+	CheckboxSaveImages.SetY(top + 12);
 	CheckboxSaveImages.SetText(L"Save images to the clipboard");
 	CheckboxSaveImages.UseBasicTheme = !useLightTheme;
 	CheckboxSaveImages.ResumeLayout();
@@ -858,44 +953,46 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	LabelMaxCacheMbytes = Controls::Label(hWnd, LBL_MAX_IMG_CACHE_MB, hInstance);
 	LabelMaxCacheMbytes.SuspendLayout();
 	LabelMaxCacheMbytes.SetX(left + 18);
-	LabelMaxCacheMbytes.SetY(40);
+	LabelMaxCacheMbytes.SetY(top + 40);
 	LabelMaxCacheMbytes.SetText(L"Max image cache size (MB):");
 	LabelMaxCacheMbytes.ResumeLayout();
 
 	SpinnerMaxCacheMbytes = Controls::Spinner(hWnd, TXT_MAX_IMG_CACHE_MB, UD_MAX_IMG_CACHE_MB, hInstance);
 	SpinnerMaxCacheMbytes.SuspendLayout();
-	SpinnerMaxCacheMbytes.SetX(left + 180);
-	SpinnerMaxCacheMbytes.SetY(38);
+	SpinnerMaxCacheMbytes.SetX(left + 200);
+	SpinnerMaxCacheMbytes.SetY(top + 38);
 	SpinnerMaxCacheMbytes.SetMinValue(UserSettings::MAX_CACHE_MBYTES_LOWER);
 	SpinnerMaxCacheMbytes.SetMaxValue(UserSettings::MAX_CACHE_MBYTES_UPPER);
 	SpinnerMaxCacheMbytes.ResumeLayout();
 
-	AddButton(left, 72, 150, L"&Recreate thumbnails", BTN_RECREATE_THUMBNAILS, hInstance);
+	AddButton(left, top + 72, 150, L"&Recreate thumbnails", BTN_RECREATE_THUMBNAILS, hInstance);
 	AssignNewControlsToPage(PAGE_IMAGES);
 
 	// Updates
+	AddHeading(left, L"Updates", hInstance);
 	CheckboxNotifyUpdates = Controls::Checkbox(hWnd, CHK_NOTIFY_UPDATES, hInstance);
 	CheckboxNotifyUpdates.SuspendLayout();
 	CheckboxNotifyUpdates.SetX(left);
-	CheckboxNotifyUpdates.SetY(12);
+	CheckboxNotifyUpdates.SetY(top + 12);
 	CheckboxNotifyUpdates.SetText(L"Notify me about updates");
 	CheckboxNotifyUpdates.UseBasicTheme = !useLightTheme;
 	CheckboxNotifyUpdates.ResumeLayout();
 
-	AddText(left, 42, 280, 32, L"Updates are installed only after you confirm them, and only if they are signed by this project.",
+	AddText(left, top + 42, 280, 32, L"Updates are installed only after you confirm them, and only if they are signed by this project.",
 		IDC_STATIC, hInstance);
-	AddText(left, 84, 280, 16, L"Installed version:", LBL_INSTALLED_VERSION, hInstance);
-	AddButton(left, 108, 110, L"Check &now", BTN_CHECK_UPDATES, hInstance);
+	AddText(left, top + 84, 280, 16, L"Installed version:", LBL_INSTALLED_VERSION, hInstance);
+	AddButton(left, top + 108, 110, L"Check &now", BTN_CHECK_UPDATES, hInstance);
 	AssignNewControlsToPage(PAGE_UPDATES);
 
 	// About
-	AddText(left, 12, 280, 16, (L"Winclipper " + Updater::CurrentVersion()).c_str(), IDC_STATIC, hInstance);
-	AddText(left, 36, 280, 16, L"Copyright (C) 2021 Carson Shook", IDC_STATIC, hInstance);
-	AddText(left, 54, 280, 16, L"Copyright (C) 2026 Tom - tomcek42 (fork)", IDC_STATIC, hInstance);
-	AddText(left, 78, 280, 16, L"Released under the MIT License.", IDC_STATIC, hInstance);
+	AddHeading(left, L"About", hInstance);
+	AddText(left, top + 12, 280, 16, (L"Winclipper " + Updater::CurrentVersion()).c_str(), IDC_STATIC, hInstance);
+	AddText(left, top + 36, 280, 16, L"Copyright (C) 2021 Carson Shook", IDC_STATIC, hInstance);
+	AddText(left, top + 54, 280, 16, L"Copyright (C) 2026 Tom - tomcek42 (fork)", IDC_STATIC, hInstance);
+	AddText(left, top + 78, 280, 16, L"Released under the MIT License.", IDC_STATIC, hInstance);
 	HWND link = CreateWindowExW(0, WC_LINK,
 		L"<a href=\"https://github.com/tomcek42/Winclipper\">github.com/tomcek42/Winclipper</a>",
-		WS_CHILD | WS_VISIBLE | WS_TABSTOP, ScaleX(left), ScaleY(102), ScaleX(280), ScaleY(18),
+		WS_CHILD | WS_VISIBLE | WS_TABSTOP, ScaleX(left), ScaleY(top + 102), ScaleX(280), ScaleY(18),
 		hWnd, reinterpret_cast<HMENU>(LNK_REPOSITORY), hInstance, nullptr);
 	SendMessageW(link, WM_SETFONT, reinterpret_cast<WPARAM>(hFontStd), FALSE);
 	AssignNewControlsToPage(PAGE_ABOUT);

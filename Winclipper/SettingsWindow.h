@@ -64,6 +64,9 @@ private:
 	wchar_t						szTitle[MAX_LOADSTRING];                    // The title bar text
 	
 	HFONT						hFontStd;
+	HFONT						hFontHeading = nullptr;
+	HBRUSH						hbrSidebar = nullptr;
+	static const int			SIDEBAR_WIDTH = 140;
 	HBRUSH						hbrBkgnd;
 	HBRUSH						hbrCtrlBkgnd;
 	HWND						windowHandle = nullptr;
@@ -91,6 +94,10 @@ private:
 	LRESULT						WmCtlColorEdit(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmClose(HWND hWnd);
 	LRESULT						WmNotify(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	LRESULT						WmDrawItem(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	HWND						AddHeading(int x, LPCWSTR text, HINSTANCE hInstance);
+	void						ApplyWindowStyle(HWND hWnd);
+	static COLORREF				AccentColor();
 	LRESULT						WmCommandNavigation(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandLstPrivateAllowed(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandBtnAddPrivate(HWND hWnd, WPARAM wParam, LPARAM lParam);
