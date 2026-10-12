@@ -45,6 +45,9 @@ Check installed toolsets:
 - The `Controls` subproject header is only found through this include path; `Controls.h`
   is not in the Winclipper directory.
 - `Winclipper.rc` is UTF-16 LE. Edit it with an encoding-aware tool, not with sed.
+- The Settings pages are not child dialogs: all controls are children of the settings window, and
+  `AssignNewControlsToPage` records which page each belongs to. Create new controls inside the right page block,
+  before its `AssignNewControlsToPage` call, or they show on every page.
 
 ## Security conventions for changes
 
@@ -58,6 +61,10 @@ subtraction of two file fields without checking their order first, and always ch
 Clip contents (`clips.dat`, `BitmapCache\`) are encrypted with DPAPI via `File::WriteProtected`/`ReadProtected`.
 Persist new clip content only through these, never with `File::Write`. Thumbnails are deliberately never written
 to disk (F2).
+
+Clipboard content marked as private (F14) is skipped unless the owning program is on the user's allow list
+(`UserSettings::IsPrivateAllowed`). Do not add programs to it implicitly; the `1Password.exe` default was requested
+by the project owner. Updates are never installed without the user's confirmation in the update dialog.
 
 The installer has its own `UpgradeCode` and removes upstream installations via `<Upgrade>` on the old codes.
 Do not bring back the upstream code.

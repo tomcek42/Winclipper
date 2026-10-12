@@ -165,6 +165,12 @@ Password managers mark copied secrets with `ExcludeClipboardContentFromMonitorPr
 permanently in `clips.dat`, in plaintext (F2). Fix: `ClipboardContentExcluded` checks the three formats while the
 clipboard is open and skips marked content. An unreadable `CanIncludeInClipboardHistory` value counts as excluded.
 
+Follow-up (`9dc9515`, at the project owner's request): marked content is kept if the clipboard owner's EXE file name
+is on an allow list in Settings (`1Password.exe` by default). Matching is by file name, so any process with that
+name is treated the same; this is accepted because any process of the user can read the clipboard anyway. Such
+clips are stored DPAPI-encrypted like all others. Names from `settings.dat` are validated (printable ASCII subset,
+no path) and capped at 50.
+
 Clipboard ownership otherwise without security findings: `ClipLock` (non-atomic `bool`, UI thread only) suppresses
 the `WM_CLIPBOARDUPDATE` after Winclipper sets the clipboard itself. If all attempts in `SetClipboardToClipAtIndex`
 fail, it stays set and the next real copy is swallowed (functional, minor).
