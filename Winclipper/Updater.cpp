@@ -390,20 +390,34 @@ namespace
 		}
 
 		DWORD written = 0;
-		std::string reread(msi.size(), '\0');
-		DWORD read = 0;
-		BYTE actual[32];
-		LARGE_INTEGER zero = {};
-		if (WriteFile(file, msi.data(), static_cast<DWORD>(msi.size()), &written, nullptr) && written == msi.size()
-			&& FlushFileBuffers(file)
-			&& SetFilePointerEx(file, zero, nullptr, FILE_BEGIN)
-			&& ReadFile(file, &reread[0], static_cast<DWORD>(reread.size()), &read, nullptr) && read == msi.size()
-			&& Sha256(reread.data(), reread.size(), actual)
-			&& memcmp(actual, expected, sizeof(actual)) == 0)
-		{
-			return file;
-		}
+		const bool writeOk = WriteFile(file, msi.data(), static_cast<DWORD>(msi.size()), &written, nullptr)
+			&& written == msi.size() && FlushFileBuffers(file);
 		CloseHandle(file);
+
+		// msiexec opens the package denying write sharing, which fails with
+		// 1619 while a write handle is open. Reopen read-only, still denying
+		// writers and deletion, and hash what this handle sees: a swap in the
+		// short gap after closing the write handle is caught here.
+		if (writeOk)
+		{
+			file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+				FILE_ATTRIBUTE_NORMAL, nullptr);
+			if (file != INVALID_HANDLE_VALUE)
+			{
+				std::string reread(msi.size(), '\0');
+				DWORD read = 0;
+				BYTE actual[32];
+				LARGE_INTEGER size = {};
+				if (GetFileSizeEx(file, &size) && static_cast<unsigned long long>(size.QuadPart) == msi.size()
+					&& ReadFile(file, &reread[0], static_cast<DWORD>(reread.size()), &read, nullptr) && read == msi.size()
+					&& Sha256(reread.data(), reread.size(), actual)
+					&& memcmp(actual, expected, sizeof(actual)) == 0)
+				{
+					return file;
+				}
+				CloseHandle(file);
+			}
+		}
 		DeleteFileW(path.c_str());
 		return INVALID_HANDLE_VALUE;
 	}
