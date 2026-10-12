@@ -28,6 +28,10 @@ build an installer on its own, build the EXE first and then run `dotnet build -c
 
 ## Changelog
 
+**1.6.0** - 2026-10-12 (this fork)
+
+- Optional automatic updates from this fork's releases, verified with a minisign (Ed25519) signature. Off by default; see `docs/UPDATER.md`.
+
 **1.5.1** - 2026-10-11 (this fork)
 
 - `Winclipper.exe` now reports its version correctly (1.5.0 still reported 1.4.2.0).

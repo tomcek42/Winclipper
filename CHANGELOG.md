@@ -3,7 +3,7 @@
 Changes in this fork compared to `Carson-Shook/Winclipper` 1.4.2. Details on each finding:
 `.gsd/SECURITY-FINDINGS.md`.
 
-## Unreleased
+## 1.6.0 (2026-10-12)
 
 ### Features
 - Optional automatic updates ("Install updates automatically" in Settings, off by default). Updates come from
