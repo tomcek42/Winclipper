@@ -234,9 +234,19 @@ std::vector<std::wstring> File::ReadAllLines(const wchar_t * name)
     std::vector<std::wstring> lines;
     std::wifstream myfile(name);
 
-    std::copy(std::istream_iterator<std::wstring, wchar_t>(myfile),
-        std::istream_iterator<std::wstring, wchar_t>(),
-        std::back_inserter(lines));
+    // Whole lines, not whitespace-separated words: values may contain spaces.
+    std::wstring line;
+    while (std::getline(myfile, line))
+    {
+        if (!line.empty() && line.back() == L'\r')
+        {
+            line.pop_back();
+        }
+        if (!line.empty())
+        {
+            lines.push_back(line);
+        }
+    }
     return lines;
 }
 

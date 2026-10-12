@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "UserSettings.h"
+#include <algorithm>
 
 std::wstring UserSettings::fullSettingPath;
 int	UserSettings::maxDisplayClips;
@@ -11,6 +12,8 @@ bool UserSettings::select2ndClip;
 bool UserSettings::showPreview;
 bool UserSettings::pasteOnClick;
 bool UserSettings::autoUpdate;
+std::vector<std::wstring> UserSettings::privateAllowed;
+std::mutex UserSettings::privateAllowedMutex;
 bool UserSettings::saveImages;
 unsigned int UserSettings::maxCacheMegabytes;
 std::atomic<int> UserSettings::settingWriterWaitCount{ 0 };
@@ -88,6 +91,8 @@ void UserSettings::InitializeSettings()
 	saveImages = SAVE_IMAGES_DEF;
 	pasteOnClick = PASTE_ON_CLICK_DEF;
 	autoUpdate = AUTO_UPDATE_DEF;
+	// Requested by the project owner; removable in Settings.
+	privateAllowed = { L"1Password.exe" };
 	maxCacheMegabytes = MAX_CACHE_MBYTES_DEF;
 
 	settingWriterWaitCount = 0;
@@ -340,6 +345,81 @@ void UserSettings::SetAutoUpdate(bool autoUpdate)
 	}
 }
 
+// Only bare file names of printable ASCII (no path, no separator): settings.dat
+// is untrusted and written through a narrow stream.
+bool UserSettings::IsValidProgramName(const std::wstring & name)
+{
+	if (name.empty() || name.size() > 100 || name.front() == L' ' || name.back() == L' ')
+	{
+		return false;
+	}
+	for (wchar_t c : name)
+	{
+		const bool allowed = (c >= L'a' && c <= L'z') || (c >= L'A' && c <= L'Z') || (c >= L'0' && c <= L'9')
+			|| c == L' ' || c == L'.' || c == L'_' || c == L'-' || c == L'(' || c == L')' || c == L'+';
+		if (!allowed)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+std::vector<std::wstring> UserSettings::PrivateAllowedPrograms()
+{
+	std::lock_guard<std::mutex> lock(privateAllowedMutex);
+	return privateAllowed;
+}
+
+bool UserSettings::IsPrivateAllowed(const std::wstring & exeName)
+{
+	std::lock_guard<std::mutex> lock(privateAllowedMutex);
+	for (const auto & name : privateAllowed)
+	{
+		if (_wcsicmp(name.c_str(), exeName.c_str()) == 0)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool UserSettings::AddPrivateAllowed(const std::wstring & exeName)
+{
+	if (!IsValidProgramName(exeName))
+	{
+		return false;
+	}
+	{
+		std::lock_guard<std::mutex> lock(privateAllowedMutex);
+		for (const auto & name : privateAllowed)
+		{
+			if (_wcsicmp(name.c_str(), exeName.c_str()) == 0)
+			{
+				return true;
+			}
+		}
+		if (privateAllowed.size() >= PRIVATE_ALLOWED_MAX)
+		{
+			return false;
+		}
+		privateAllowed.push_back(exeName);
+	}
+	SaveSettingsAsync();
+	return true;
+}
+
+void UserSettings::RemovePrivateAllowed(const std::wstring & exeName)
+{
+	{
+		std::lock_guard<std::mutex> lock(privateAllowedMutex);
+		privateAllowed.erase(std::remove_if(privateAllowed.begin(), privateAllowed.end(),
+			[&](const std::wstring & name) { return _wcsicmp(name.c_str(), exeName.c_str()) == 0; }),
+			privateAllowed.end());
+	}
+	SaveSettingsAsync();
+}
+
 bool UserSettings::SaveImages()
 {
 	return UserSettings::saveImages;
@@ -416,6 +496,17 @@ std::vector<std::wstring> UserSettings::Serialize()
 		(std::to_wstring(PASTE_ON_CLICK) + SEPARATOR + std::to_wstring(PasteOnClick())),
 		(std::to_wstring(AUTO_UPDATE) + SEPARATOR + std::to_wstring(AutoUpdate())),
     };
+
+	std::wstring allowed;
+	for (const auto & name : PrivateAllowedPrograms())
+	{
+		if (!allowed.empty())
+		{
+			allowed += L"/";
+		}
+		allowed += name;
+	}
+	retVal.push_back(std::to_wstring(PRIVATE_ALLOWED) + SEPARATOR + allowed);
 
     return retVal;
 }
@@ -505,6 +596,29 @@ void UserSettings::Deserialize(std::vector<std::wstring> srData)
     			{
     				bool result = pair.second.compare(std::to_wstring(true)) == 0;
     				SetAutoUpdate(result);
+    			}
+    		break;
+    		case PRIVATE_ALLOWED:
+    			{
+    				// Invalid names are dropped; the list is capped.
+    				std::vector<std::wstring> names;
+    				size_t start = 0;
+    				while (start <= pair.second.size() && names.size() < PRIVATE_ALLOWED_MAX)
+    				{
+    					size_t end = pair.second.find(L'/', start);
+    					if (end == std::wstring::npos)
+    					{
+    						end = pair.second.size();
+    					}
+    					std::wstring name = pair.second.substr(start, end - start);
+    					if (IsValidProgramName(name))
+    					{
+    						names.push_back(name);
+    					}
+    					start = end + 1;
+    				}
+    				std::lock_guard<std::mutex> lock(privateAllowedMutex);
+    				privateAllowed = names;
     			}
     		break;
             default:

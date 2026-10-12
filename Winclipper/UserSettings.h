@@ -3,6 +3,7 @@
 // the current users's AppData folder
 // and makes them available to read or change
 #include <atomic>
+#include <mutex>
 #include "Notify.h"
 #include "resource.h"
 #include "Shlobj.h"
@@ -44,6 +45,10 @@
 #define AUTO_UPDATE			11
 #define AUTO_UPDATE_DEF		false
 
+// Programs whose clipboard content is kept even if it is marked as private
+// (e.g. by a password manager). Stored as file names separated by '/'.
+#define PRIVATE_ALLOWED		12
+
 // Save and load user settings to and from disk
 class UserSettings : public Notify
 {
@@ -60,6 +65,8 @@ private:
 	static bool				saveImages;
 	static unsigned int		maxCacheMegabytes;
 	static bool				autoUpdate;
+	static std::vector<std::wstring>	privateAllowed;
+	static std::mutex		privateAllowedMutex;
 
 	static std::atomic<int>	settingWriterWaitCount;
 	static std::atomic<bool>	isWriterFinished;
@@ -125,6 +132,13 @@ public:
 
 	static bool				AutoUpdate();
 	static void				SetAutoUpdate(bool autoUpdate);
+
+	static const size_t		PRIVATE_ALLOWED_MAX = 50;
+	static bool				IsValidProgramName(const std::wstring & name);
+	static std::vector<std::wstring>	PrivateAllowedPrograms();
+	static bool				IsPrivateAllowed(const std::wstring & exeName);
+	static bool				AddPrivateAllowed(const std::wstring & exeName);
+	static void				RemovePrivateAllowed(const std::wstring & exeName);
 
 };
 

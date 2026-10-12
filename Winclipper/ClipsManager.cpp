@@ -334,6 +334,32 @@ static bool ClipboardContentExcluded()
 	return excluded;
 }
 
+// File name of the program that owns the clipboard, or empty if it cannot be
+// determined (e.g. content set without an owner window).
+static std::wstring ClipboardOwnerExeName()
+{
+	HWND owner = GetClipboardOwner();
+	DWORD processId = 0;
+	if (owner == nullptr || GetWindowThreadProcessId(owner, &processId) == 0 || processId == 0)
+	{
+		return std::wstring();
+	}
+	HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+	if (process == nullptr)
+	{
+		return std::wstring();
+	}
+	wchar_t path[MAX_PATH];
+	DWORD length = MAX_PATH;
+	const BOOL ok = QueryFullProcessImageNameW(process, 0, path, &length);
+	CloseHandle(process);
+	if (!ok || length == 0)
+	{
+		return std::wstring();
+	}
+	return std::wstring(PathFindFileNameW(path));
+}
+
 bool ClipsManager::AddToClips(HWND hWnd)
 {
     if (!OpenClipboard(hWnd))
@@ -341,7 +367,10 @@ bool ClipsManager::AddToClips(HWND hWnd)
         return false;
     }
 
-	if (ClipboardContentExcluded())
+	// Private content is kept only from programs the user allowed explicitly.
+	// The owner is matched by file name, so this is a convenience, not a
+	// security boundary (any process of the user can read the clipboard anyway).
+	if (ClipboardContentExcluded() && !UserSettings::IsPrivateAllowed(ClipboardOwnerExeName()))
 	{
 		CloseClipboard();
 		return true;
