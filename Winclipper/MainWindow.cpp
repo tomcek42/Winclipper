@@ -174,6 +174,30 @@ LRESULT MainWindow::MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 	return 0;
 }
 
+// Reads the file version from the EXE's version resource, so the About box
+// cannot fall behind a version bump.
+static std::wstring ExecutableVersion()
+{
+	wchar_t path[MAX_PATH];
+	const DWORD length = GetModuleFileNameW(nullptr, path, MAX_PATH);
+	if (length == 0 || length >= MAX_PATH)
+	{
+		return L"?";
+	}
+	DWORD handle = 0;
+	const DWORD size = GetFileVersionInfoSizeW(path, &handle);
+	std::vector<BYTE> data(size);
+	VS_FIXEDFILEINFO * info = nullptr;
+	UINT infoLength = 0;
+	if (size == 0 || !GetFileVersionInfoW(path, 0, size, data.data())
+		|| !VerQueryValueW(data.data(), L"\\", reinterpret_cast<void **>(&info), &infoLength) || infoLength < sizeof(*info))
+	{
+		return L"?";
+	}
+	return std::to_wstring(HIWORD(info->dwFileVersionMS)) + L"." + std::to_wstring(LOWORD(info->dwFileVersionMS))
+		+ L"." + std::to_wstring(HIWORD(info->dwFileVersionLS));
+}
+
 // Message handler for about box.
 INT_PTR CALLBACK MainWindow::About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -181,6 +205,7 @@ INT_PTR CALLBACK MainWindow::About(HWND hDlg, UINT message, WPARAM wParam, LPARA
 	switch (message)
 	{
 	case WM_INITDIALOG:
+		SetDlgItemTextW(hDlg, IDC_ABOUT_VERSION, (L"Winclipper, Version " + ExecutableVersion()).c_str());
 		return (INT_PTR)true;
 
 	case WM_COMMAND:
