@@ -212,6 +212,8 @@ INT_PTR CALLBACK MainWindow::About(HWND hDlg, UINT message, WPARAM wParam, LPARA
 	{
 	case WM_INITDIALOG:
 		SetDlgItemTextW(hDlg, IDC_ABOUT_VERSION, (L"Winclipper, Version " + ExecutableVersion()).c_str());
+		// Opened from the tray menu, the owner is the hidden main window.
+		SetForegroundWindow(hDlg);
 		return (INT_PTR)true;
 
 	case WM_COMMAND:

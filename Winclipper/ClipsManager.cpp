@@ -702,6 +702,7 @@ void ClipsManager::ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit)
 			AppendMenuW(menu, MF_STRING, UPDATE_SELECT, (L"&Install update " + updateVersion + L"...").c_str());
 		}
         AppendMenuW(menu, MF_STRING, SETTINGS_SELECT, L"&Settings");
+        AppendMenuW(menu, MF_STRING, ABOUT_SELECT, L"&About");
 		// Debug info
 		//wchar_t str[128];
 		//wsprintf(str, L"Window handle is 0x%08x", curWin);
@@ -750,6 +751,9 @@ void ClipsManager::ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit)
             break;
         case EXIT_SELECT:
 			PostMessageW(hWnd, WM_COMMAND, IDM_EXIT, 0);
+            break;
+        case ABOUT_SELECT:
+			PostMessageW(hWnd, WM_COMMAND, IDM_ABOUT, 0);
             break;
         case UPDATE_SELECT:
 			PostMessageW(hWnd, WM_COMMAND, IDM_INSTALL_UPDATE, 0);
