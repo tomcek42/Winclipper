@@ -89,6 +89,12 @@
     <ClCompile Include="File.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="monocypher\monocypher.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="monocypher\monocypher-ed25519.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="Updater.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
