@@ -3,9 +3,11 @@
 Changes in this fork compared to `Carson-Shook/Winclipper` 1.4.2. Details on each finding:
 `.gsd/SECURITY-FINDINGS.md`.
 
-## Unreleased
+## 1.6.1 (2026-10-12)
 
 ### Changes
+- Settings are organized in vertical tabs (General, Clips, Images, Updates, About). The File/Help menu bar is gone;
+  "Clear clips", "Recreate thumbnails" and "Check now" are buttons. The tray menu has "About" below "Settings".
 - Updates are no longer installed automatically. "Notify me about updates" shows a notification and a blinking
   tray icon; the update is installed only after confirming it (notification click or "Install update …" in the
   tray menu). The checks (signature, hash, no downgrade) are unchanged.

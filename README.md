@@ -28,9 +28,15 @@ build an installer on its own, build the EXE first and then run `dotnet build -c
 
 ## Changelog
 
+**1.6.1** - 2026-10-12 (this fork)
+
+- Updates are offered, not installed automatically: a notification appears and the update installs only after you confirm it.
+- Private clipboard content (e.g. passwords) is kept from programs on an allow list (1Password by default).
+- Settings with vertical tabs; About in the tray menu; the About box shows the real version.
+
 **1.6.0** - 2026-10-12 (this fork)
 
-- Optional automatic updates from this fork's releases, verified with a minisign (Ed25519) signature. Off by default; see `docs/UPDATER.md`.
+- Optional updates from this fork's releases, verified with a minisign (Ed25519) signature. Off by default; see `docs/UPDATER.md`.
 
 **1.5.1** - 2026-10-11 (this fork)
 
