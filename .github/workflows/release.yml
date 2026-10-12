@@ -1,0 +1,94 @@
+name: Release
+
+# Push a tag like v1.6.0 to build both EXEs and MSIs, sign the update manifest and publish the release.
+# workflow_dispatch builds without signing or publishing (artifacts only).
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # windows-2025 ships Visual Studio 2026 (toolset v145) since June 2026.
+    runs-on: windows-2025
+    permissions:
+      contents: write
+    env:
+      MSBUILD_ARGS: -p:Configuration=Release -m -nologo -v:minimal
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Check the tag matches the version in the sources
+        if: github.event_name == 'push'
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}".TrimStart('v')
+          if ($v -notmatch '^\d+\.\d+\.\d+$') { throw "Tag must look like v1.2.3" }
+          $full = "$v.0"
+          foreach ($f in 'Setup-x64/Product.wxs', 'Setup-x86/Product.wxs') {
+            if (-not (Select-String -Quiet -SimpleMatch "Version=`"$full`"" $f)) { throw "$f is not at $full" }
+          }
+          $rc = [IO.File]::ReadAllText('Winclipper/Winclipper.rc', [Text.Encoding]::Unicode)
+          if (-not $rc.Contains("`"FileVersion`", `"$full`"")) { throw "Winclipper.rc is not at $full" }
+          "VERSION=$full" >> $env:GITHUB_ENV
+
+      - name: Build EXEs
+        run: |
+          msbuild Winclipper/Winclipper.sln -t:Winclipper -p:Platform=x64 $env:MSBUILD_ARGS.Split(' ')
+          msbuild Winclipper/Winclipper.sln -t:Winclipper -p:Platform=x86 $env:MSBUILD_ARGS.Split(' ')
+
+      - name: Build MSIs
+        run: |
+          dotnet build Setup-x64 -c Release
+          dotnet build Setup-x86 -c Release
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item Setup-x64/bin/x64/Release/WinclipperSetup-x64.msi, Setup-x86/bin/x86/Release/WinclipperSetup-x86.msi dist/
+
+      - name: Sign the update manifest
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          MINISIGN_KEY: ${{ secrets.WINCLIPPER_UPDATE_KEY }}
+          MINISIGN_PASSWORD: ${{ secrets.WINCLIPPER_UPDATE_KEY_PASSWORD }}
+        run: |
+          if (-not $env:MINISIGN_KEY -or -not $env:MINISIGN_PASSWORD) { throw 'Signing secrets are missing.' }
+          $url = 'https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-win64.zip'
+          Invoke-WebRequest $url -OutFile "$env:RUNNER_TEMP/minisign.zip"
+          Expand-Archive "$env:RUNNER_TEMP/minisign.zip" "$env:RUNNER_TEMP/minisign"
+          $exe = Get-ChildItem -Recurse "$env:RUNNER_TEMP/minisign" -Filter minisign.exe | Where-Object FullName -match 'x86_64' | Select-Object -First 1
+          $env:PATH = "$($exe.DirectoryName);$env:PATH"
+          $key = Join-Path $env:RUNNER_TEMP 'winclipper-update.key'
+          [IO.File]::WriteAllText($key, $env:MINISIGN_KEY.Trim() + "`n")
+          try {
+            ./tools/sign-update.ps1 -Version $env:VERSION -KeyFile $key
+          } finally {
+            Remove-Item $key -Force
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: winclipper
+          path: dist/*
+
+      - name: Publish the release
+        if: github.event_name == 'push'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v ver="$VERSION" '/^## / { if (found) exit; if (index($0, ver)) found=1; next } found { print }' CHANGELOG.md > notes.md
+          { echo; echo '### SHA-256'; echo '```'; (cd dist && sha256sum *.msi); echo '```'; } >> notes.md
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "Winclipper $VERSION" \
+            --notes-file notes.md dist/WinclipperSetup-x64.msi dist/WinclipperSetup-x86.msi \
+            dist/winclipper-update.txt dist/winclipper-update.txt.minisig

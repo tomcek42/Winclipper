@@ -46,7 +46,12 @@ foreach ($arch in 'x64', 'x86') {
 $manifest = Join-Path $OutDir 'winclipper-update.txt'
 [IO.File]::WriteAllBytes($manifest, [Text.Encoding]::ASCII.GetBytes(($lines -join "`n") + "`n"))
 
-minisign -S -s $KeyFile -m $manifest -t "winclipper-update $Version"
+# In CI the password comes from MINISIGN_PASSWORD; minisign reads it from stdin.
+if ($env:MINISIGN_PASSWORD) {
+    $env:MINISIGN_PASSWORD | minisign -S -s $KeyFile -m $manifest -t "winclipper-update $Version"
+} else {
+    minisign -S -s $KeyFile -m $manifest -t "winclipper-update $Version"
+}
 if ($LASTEXITCODE -ne 0) { throw 'Signing failed.' }
 minisign -V -p $publicKeyFile -m $manifest
 if ($LASTEXITCODE -ne 0) { throw 'Signature self-check failed.' }

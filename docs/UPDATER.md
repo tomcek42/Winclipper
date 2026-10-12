@@ -39,11 +39,17 @@ x86 <sha256 hex> https://github.com/tomcek42/Winclipper/releases/download/v1.6.0
 
 ## Releasing an update
 
-1. Bump the version in the three places listed in `CLAUDE.md`, then build both EXEs and both MSIs into `dist/`.
-2. `pwsh tools/sign-update.ps1 -Version 1.6.0.0` writes `dist/winclipper-update.txt` and
-   `.txt.minisig`. It needs `minisign` (`winget install jedisct1.minisign`) and asks for the key password.
-3. Create the release `v1.6.0` with all four files as assets. The tag must match the URLs in the manifest
-   (a trailing `.0` is dropped).
+Releases are built and signed by GitHub Actions (`.github/workflows/release.yml`):
+
+1. Bump the version in the three places listed in `CLAUDE.md` and add a `## <version>` section to `CHANGELOG.md`.
+2. Commit, then push a tag `v1.6.0` (a trailing `.0` is dropped). The workflow checks that the tag matches the
+   sources, builds both EXEs and MSIs, signs the manifest and publishes the release with all four files.
+   Its release notes are the matching `CHANGELOG.md` section plus the MSI hashes.
+3. Running the workflow manually (`workflow_dispatch`) only builds and uploads the MSIs as artifacts.
+
+The workflow needs two repository secrets: `WINCLIPPER_UPDATE_KEY` (the full content of the minisign `.key`
+file) and `WINCLIPPER_UPDATE_KEY_PASSWORD`. A manual fallback still works locally:
+`pwsh tools/sign-update.ps1 -Version 1.6.0.0` (needs `minisign`, asks for the password).
 
 ## The signing key
 
