@@ -6,6 +6,8 @@
 #include "RegistryUtilities.h"
 #include "Notify.h"
 #include "UserSettings.h"
+#include "Updater.h"
+#include <map>
 
 #define LBL_MAX_CLIPS_DISPLAY   200
 #define TXT_MAX_CLIPS_DISPLAY   201
@@ -34,6 +36,17 @@
 
 #define CHK_PASTE_ON_CLICK	    219
 #define CHK_NOTIFY_UPDATES	        220
+
+#define LST_NAVIGATION          221
+#define BTN_CLEAR_CLIPS         222
+#define BTN_RECREATE_THUMBNAILS 223
+#define BTN_CHECK_UPDATES       224
+#define LBL_INSTALLED_VERSION   225
+#define LBL_PRIVATE_ALLOWED     226
+#define LST_PRIVATE_ALLOWED     227
+#define BTN_ADD_PRIVATE         228
+#define BTN_REMOVE_PRIVATE      229
+#define LNK_REPOSITORY          230
 
 
 class SettingsWindow : public Notify
@@ -77,6 +90,22 @@ private:
 	LRESULT						WmCtlColorStatic(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCtlColorEdit(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmClose(HWND hWnd);
+	LRESULT						WmNotify(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	LRESULT						WmCommandNavigation(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	LRESULT						WmCommandLstPrivateAllowed(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	LRESULT						WmCommandBtnAddPrivate(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	LRESULT						WmCommandBtnRemovePrivate(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	LRESULT						WmCommandBtnCheckUpdates(HWND hWnd, WPARAM wParam, LPARAM lParam);
+
+	enum Page { PAGE_GENERAL, PAGE_CLIPS, PAGE_IMAGES, PAGE_UPDATES, PAGE_ABOUT, PAGE_COUNT };
+	HWND						navigationList = nullptr;
+	HWND						privateAllowedList = nullptr;
+	std::map<HWND, int>			pageOfControl;
+	void						AssignNewControlsToPage(int page);
+	void						ShowPage(int page);
+	void						RefreshPrivateAllowedList();
+	HWND						AddButton(int x, int y, int width, LPCWSTR text, UINT_PTR id, HINSTANCE hInstance);
+	HWND						AddText(int x, int y, int width, int height, LPCWSTR text, UINT_PTR id, HINSTANCE hInstance);
 
 	Controls::Label				LabelMaxClipsDisplay;
 	Controls::Spinner			SpinnerMaxClipsDisplay;
