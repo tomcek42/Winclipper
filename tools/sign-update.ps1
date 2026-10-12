@@ -1,12 +1,13 @@
 <#
 .SYNOPSIS
-Creates the signed update manifest for a release (winclipper-update.txt + .sig).
+Creates the signed update manifest for a release (winclipper-update.txt + .minisig).
 
 .DESCRIPTION
 Hashes the two MSIs, writes the manifest that Winclipper's updater downloads from
-the latest GitHub release, and signs it with the release signing key (ECDSA P-256,
-IEEE P1363 signature). The private key is DPAPI-protected for the project owner at
-%USERPROFILE%\.winclipper\update-signing-key.dpapi and never enters the repository.
+the latest GitHub release, and signs it with minisign (Ed25519, the same scheme the
+Tauri updater uses). The secret key is a password-protected minisign key file kept
+by the project owner outside the repository; it is not bound to a Windows profile,
+so a backup copy works on any machine. minisign asks for the key password.
 Upload both output files as release assets next to the MSIs.
 
 .EXAMPLE
@@ -16,10 +17,22 @@ param(
     [Parameter(Mandatory)][ValidatePattern('^\d+\.\d+\.\d+\.\d+$')][string]$Version,
     [string]$MsiDir = 'dist',
     [string]$OutDir = 'dist',
-    [string]$KeyFile = "$env:USERPROFILE\.winclipper\update-signing-key.dpapi"
+    [string]$KeyFile = "$env:USERPROFILE\.winclipper\winclipper-update.key"
 )
 $ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName System.Security
+$repo = Split-Path $PSScriptRoot
+$publicKeyFile = Join-Path $PSScriptRoot 'winclipper-update.pub'
+
+if (-not (Get-Command minisign -ErrorAction SilentlyContinue)) {
+    throw 'minisign not found. Install it with: winget install jedisct1.minisign'
+}
+
+# The EXE embeds the public key; signing with a key it does not know would ship
+# a release that no installed copy accepts.
+$publicKey = (Get-Content $publicKeyFile)[1].Trim()
+if (-not (Select-String -Quiet -SimpleMatch "`"$publicKey`"" (Join-Path $repo 'Winclipper\Updater.cpp'))) {
+    throw "Public key in $publicKeyFile does not match SIGNING_PUBLIC_KEY in Winclipper\Updater.cpp."
+}
 
 $tag = 'v' + ($Version -replace '\.0$', '')
 $base = "https://github.com/tomcek42/Winclipper/releases/download/$tag"
@@ -30,24 +43,12 @@ foreach ($arch in 'x64', 'x86') {
     $hash = (Get-FileHash -Algorithm SHA256 $msi).Hash.ToLowerInvariant()
     $lines += "$arch $hash $base/WinclipperSetup-$arch.msi"
 }
-$manifest = [Text.Encoding]::ASCII.GetBytes(($lines -join "`n") + "`n")
+$manifest = Join-Path $OutDir 'winclipper-update.txt'
+[IO.File]::WriteAllBytes($manifest, [Text.Encoding]::ASCII.GetBytes(($lines -join "`n") + "`n"))
 
-$pkcs8 = [Security.Cryptography.ProtectedData]::Unprotect(
-    [IO.File]::ReadAllBytes($KeyFile), $null, 'CurrentUser')
-$key = [Security.Cryptography.ECDsa]::Create()
-try {
-    $key.ImportPkcs8PrivateKey($pkcs8, [ref]$null)
-    $signature = $key.SignData($manifest, [Security.Cryptography.HashAlgorithmName]::SHA256,
-        [Security.Cryptography.DSASignatureFormat]::IeeeP1363FixedFieldConcatenation)
-    if (-not $key.VerifyData($manifest, $signature, [Security.Cryptography.HashAlgorithmName]::SHA256,
-        [Security.Cryptography.DSASignatureFormat]::IeeeP1363FixedFieldConcatenation)) {
-        throw 'Signature self-check failed.'
-    }
-} finally {
-    [Array]::Clear($pkcs8, 0, $pkcs8.Length)
-    $key.Dispose()
-}
+minisign -S -s $KeyFile -m $manifest -t "winclipper-update $Version"
+if ($LASTEXITCODE -ne 0) { throw 'Signing failed.' }
+minisign -V -p $publicKeyFile -m $manifest
+if ($LASTEXITCODE -ne 0) { throw 'Signature self-check failed.' }
 
-[IO.File]::WriteAllBytes((Join-Path $OutDir 'winclipper-update.txt'), $manifest)
-[IO.File]::WriteAllBytes((Join-Path $OutDir 'winclipper-update.sig'), $signature)
-Write-Output ([Text.Encoding]::ASCII.GetString($manifest))
+Get-Content $manifest

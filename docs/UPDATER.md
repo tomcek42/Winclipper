@@ -7,10 +7,13 @@ This one trusts a signing key, not a server.
 ## How it works
 
 1. Two minutes after start (ten seconds after the setting is turned on), and then every 24 hours, Winclipper
-   downloads `winclipper-update.txt` and `winclipper-update.sig` from the latest release of
+   downloads `winclipper-update.txt` and `winclipper-update.txt.minisig` from the latest release of
    `tomcek42/Winclipper` over HTTPS.
-2. The manifest must carry a valid ECDSA P-256 signature from the release signing key. The public key is
-   compiled into `Winclipper/Updater.cpp`.
+2. The manifest must carry a valid minisign signature (Ed25519 over BLAKE2b-512, the format the Tauri
+   updater uses) from the release signing key, and the trusted comment must carry a valid global signature.
+   Legacy (non-prehashed) signatures are refused. The public key is compiled into `Winclipper/Updater.cpp`
+   and also stored in `tools/winclipper-update.pub`. Verification uses the vendored Monocypher 4.0.3
+   (`Winclipper/monocypher/`), because Windows CNG has no Ed25519.
 3. The manifest version must be higher than the running EXE's version resource. Older signed manifests
    cannot roll back an installation.
 4. The MSI URL must start with `https://github.com/tomcek42/Winclipper/releases/download/`. The MSI may be
@@ -37,14 +40,27 @@ x86 <sha256 hex> https://github.com/tomcek42/Winclipper/releases/download/v1.6.0
 ## Releasing an update
 
 1. Bump the version in the three places listed in `CLAUDE.md`, then build both EXEs and both MSIs into `dist/`.
-2. `pwsh tools/sign-update.ps1 -Version 1.6.0.0` writes `dist/winclipper-update.txt` and `.sig`.
+2. `pwsh tools/sign-update.ps1 -Version 1.6.0.0` writes `dist/winclipper-update.txt` and
+   `.txt.minisig`. It needs `minisign` (`winget install jedisct1.minisign`) and asks for the key password.
 3. Create the release `v1.6.0` with all four files as assets. The tag must match the URLs in the manifest
    (a trailing `.0` is dropped).
 
 ## The signing key
 
-The private key is DPAPI-protected for the project owner at
-`%USERPROFILE%\.winclipper\update-signing-key.dpapi`. It is never committed. Back it up, for example
-exported to an offline medium. If it is lost, no further update can be signed. Installed copies then need
-a manual update to a build with a new public key. If it leaks, an attacker who can also serve files from
-the fork's latest release can push an update. Rotate the key in `Updater.cpp` and ship that build manually.
+The secret key is a password-protected minisign key file (scrypt-encrypted), by default at
+`%USERPROFILE%\.winclipper\winclipper-update.key`. It is never committed. Unlike a DPAPI blob it is not bound to
+a Windows profile: the file plus its password work on any machine. Keep a backup copy and the password in
+separate safe places (for example a password manager); it can also be stored as a GitHub Actions secret if
+signing moves to CI later. If it is lost, no further update can be signed, and installed copies need a manual
+update to a build with a new public key. If it leaks together with its password, an attacker who can also
+serve files from the fork's latest release can push an update; rotate the key in `Updater.cpp` and
+`tools/winclipper-update.pub` and ship that build manually.
+
+Create a new key pair (minisign asks for the password):
+
+```
+minisign -G -p tools\winclipper-update.pub -s %USERPROFILE%\.winclipper\winclipper-update.key
+```
+
+Then put the second line of `tools/winclipper-update.pub` into `SIGNING_PUBLIC_KEY` in `Updater.cpp`.
+`tools/sign-update.ps1` refuses to sign if the two differ.

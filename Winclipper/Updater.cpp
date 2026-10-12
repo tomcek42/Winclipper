@@ -7,14 +7,18 @@
 #include <algorithm>
 #include <winhttp.h>
 #include <bcrypt.h>
+#include <wincrypt.h>
+#include "monocypher/monocypher.h"
+#include "monocypher/monocypher-ed25519.h"
 #pragma comment(lib, "Winhttp.lib")
 #pragma comment(lib, "Bcrypt.lib")
+#pragma comment(lib, "Crypt32.lib")
 #pragma comment(lib, "Version.lib")
 
 namespace
 {
 	const wchar_t MANIFEST_URL[] = L"https://github.com/tomcek42/Winclipper/releases/latest/download/winclipper-update.txt";
-	const wchar_t SIGNATURE_URL[] = L"https://github.com/tomcek42/Winclipper/releases/latest/download/winclipper-update.sig";
+	const wchar_t SIGNATURE_URL[] = L"https://github.com/tomcek42/Winclipper/releases/latest/download/winclipper-update.txt.minisig";
 	// The signed manifest may only point at release assets of this fork.
 	const char ALLOWED_MSI_PREFIX[] = "https://github.com/tomcek42/Winclipper/releases/download/";
 	const char MANIFEST_HEADER[] = "winclipper-update 1";
@@ -26,21 +30,17 @@ namespace
 #endif
 
 	const size_t MAX_MANIFEST_BYTES = 4096;
-	const size_t SIGNATURE_BYTES = 64;					// IEEE P1363 r||s
+	const size_t MAX_SIGNATURE_BYTES = 1024;			// minisign signature file
 	const size_t MAX_MSI_BYTES = 64 * 1024 * 1024;
 
 	const std::chrono::minutes FIRST_CHECK_DELAY(2);
 	const std::chrono::seconds ENABLED_CHECK_DELAY(10);
 	const std::chrono::hours CHECK_INTERVAL(24);
 
-	// Public half of the release signing key (ECDSA P-256). The private key is
-	// kept by the project owner outside the repository; see docs/UPDATER.md.
-	const BYTE SIGNING_KEY_X[32] = {
-		0x4C, 0xD0, 0x62, 0x61, 0xC9, 0x7F, 0xE2, 0xBA, 0x77, 0xE7, 0xB0, 0xF6, 0xD5, 0x22, 0x4B, 0x78,
-		0xA2, 0x1A, 0x38, 0x6A, 0x77, 0x9B, 0x2A, 0x21, 0x84, 0x0D, 0x97, 0x49, 0x1C, 0x5C, 0x5C, 0xDB };
-	const BYTE SIGNING_KEY_Y[32] = {
-		0x04, 0x8C, 0x5F, 0xA4, 0xE6, 0xC3, 0xB1, 0x07, 0x3B, 0xE1, 0xB1, 0x23, 0xB3, 0xAE, 0x19, 0xDE,
-		0xC1, 0x46, 0x19, 0x09, 0xC3, 0xBC, 0x81, 0xB2, 0x28, 0x26, 0xA5, 0x2C, 0x37, 0xC9, 0x73, 0xE7 };
+	// Public release signing key in minisign format (Ed25519), the same scheme
+	// the Tauri updater uses. The password-protected secret key is kept by the
+	// project owner outside the repository; see docs/UPDATER.md.
+	const char SIGNING_PUBLIC_KEY[] = "RWTz7+Iq64LIJPbV1wa0ZHkkDVs47kC4omqJRRQTLfT2U/Th4YOs67F+";
 
 	std::mutex stateMutex;
 	std::condition_variable stateChanged;
@@ -205,37 +205,71 @@ namespace
 		return success;
 	}
 
-	bool VerifySignature(const std::string & manifest, const std::string & signature)
+	bool Base64Decode(const std::string & text, std::vector<BYTE> & out)
 	{
-		if (signature.size() != SIGNATURE_BYTES)
+		DWORD size = 0;
+		if (text.empty() || text.size() > MAX_SIGNATURE_BYTES
+			|| !CryptStringToBinaryA(text.c_str(), static_cast<DWORD>(text.size()), CRYPT_STRING_BASE64, nullptr, &size, nullptr, nullptr))
 		{
 			return false;
 		}
-		BYTE hash[32];
-		if (!Sha256(manifest.data(), manifest.size(), hash))
+		out.resize(size);
+		return CryptStringToBinaryA(text.c_str(), static_cast<DWORD>(text.size()), CRYPT_STRING_BASE64, out.data(), &size, nullptr, nullptr)
+			&& size == out.size();
+	}
+
+	// Verifies a minisign signature file over the manifest:
+	//   untrusted comment: ...
+	//   base64("ED" || key id[8] || Ed25519 signature of BLAKE2b-512(manifest))
+	//   trusted comment: ...
+	//   base64(Ed25519 signature of (signature[64] || trusted comment))
+	// Only the prehashed "ED" variant is accepted, and both signatures must be valid.
+	bool VerifySignature(const std::string & manifest, const std::string & signatureFile)
+	{
+		const char TRUSTED_PREFIX[] = "trusted comment: ";
+		const size_t TRUSTED_PREFIX_LEN = sizeof(TRUSTED_PREFIX) - 1;
+
+		std::vector<std::string> lines;
+		std::istringstream stream(signatureFile);
+		std::string line;
+		while (lines.size() < 4 && std::getline(stream, line))
+		{
+			if (!line.empty() && line.back() == '\r')
+			{
+				line.pop_back();
+			}
+			lines.push_back(line);
+		}
+		if (lines.size() != 4
+			|| lines[0].compare(0, 19, "untrusted comment: ") != 0
+			|| lines[2].compare(0, TRUSTED_PREFIX_LEN, TRUSTED_PREFIX) != 0)
 		{
 			return false;
 		}
 
-		BYTE blob[sizeof(BCRYPT_ECCKEY_BLOB) + 64];
-		BCRYPT_ECCKEY_BLOB * header = reinterpret_cast<BCRYPT_ECCKEY_BLOB *>(blob);
-		header->dwMagic = BCRYPT_ECDSA_PUBLIC_P256_MAGIC;
-		header->cbKey = 32;
-		memcpy(blob + sizeof(BCRYPT_ECCKEY_BLOB), SIGNING_KEY_X, 32);
-		memcpy(blob + sizeof(BCRYPT_ECCKEY_BLOB) + 32, SIGNING_KEY_Y, 32);
-
-		bool valid = false;
-		BCRYPT_ALG_HANDLE algorithm = nullptr;
-		BCRYPT_KEY_HANDLE key = nullptr;
-		if (BCRYPT_SUCCESS(BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_ECDSA_P256_ALGORITHM, nullptr, 0))
-			&& BCRYPT_SUCCESS(BCryptImportKeyPair(algorithm, nullptr, BCRYPT_ECCPUBLIC_BLOB, &key, blob, sizeof(blob), 0)))
+		std::vector<BYTE> publicKey, signature, globalSignature;
+		if (!Base64Decode(SIGNING_PUBLIC_KEY, publicKey) || publicKey.size() != 42
+			|| publicKey[0] != 'E' || publicKey[1] != 'd'
+			|| !Base64Decode(lines[1], signature) || signature.size() != 74
+			|| signature[0] != 'E' || signature[1] != 'D'
+			|| memcmp(signature.data() + 2, publicKey.data() + 2, 8) != 0
+			|| !Base64Decode(lines[3], globalSignature) || globalSignature.size() != 64)
 		{
-			valid = BCRYPT_SUCCESS(BCryptVerifySignature(key, nullptr, hash, sizeof(hash),
-				reinterpret_cast<PUCHAR>(const_cast<char *>(signature.data())), static_cast<ULONG>(signature.size()), 0));
+			return false;
 		}
-		if (key) BCryptDestroyKey(key);
-		if (algorithm) BCryptCloseAlgorithmProvider(algorithm, 0);
-		return valid;
+		const BYTE * key = publicKey.data() + 10;
+		const BYTE * sig = signature.data() + 10;
+
+		BYTE hash[64];
+		crypto_blake2b(hash, sizeof(hash), reinterpret_cast<const BYTE *>(manifest.data()), manifest.size());
+		if (crypto_ed25519_check(sig, key, hash, sizeof(hash)) != 0)
+		{
+			return false;
+		}
+
+		std::vector<BYTE> global(sig, sig + 64);
+		global.insert(global.end(), lines[2].begin() + TRUSTED_PREFIX_LEN, lines[2].end());
+		return crypto_ed25519_check(globalSignature.data(), key, global.data(), global.size()) == 0;
 	}
 
 	bool ParseHex32(const std::string & text, BYTE (&out)[32])
@@ -410,7 +444,7 @@ namespace
 		}
 
 		std::string manifest, signature;
-		if (!HttpGet(MANIFEST_URL, MAX_MANIFEST_BYTES, manifest) || !HttpGet(SIGNATURE_URL, SIGNATURE_BYTES, signature))
+		if (!HttpGet(MANIFEST_URL, MAX_MANIFEST_BYTES, manifest) || !HttpGet(SIGNATURE_URL, MAX_SIGNATURE_BYTES, signature))
 		{
 			Log(L"no update manifest available");
 			return;

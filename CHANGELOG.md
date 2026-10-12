@@ -7,8 +7,8 @@ Changes in this fork compared to `Carson-Shook/Winclipper` 1.4.2. Details on eac
 
 ### Features
 - Optional automatic updates ("Install updates automatically" in Settings, off by default). Updates come from
-  this fork's GitHub releases and are only installed if the manifest carries a valid signature from the release
-  signing key and the MSI hash matches; downgrades are refused. The tray icon blinks while an update installs.
+  this fork's GitHub releases and are only installed if the manifest carries a valid minisign (Ed25519) signature from
+  the release signing key and the MSI hash matches; downgrades are refused. The tray icon blinks while an update installs.
   Details: `docs/UPDATER.md`.
 
 ## 1.5.1 (2026-10-11)
