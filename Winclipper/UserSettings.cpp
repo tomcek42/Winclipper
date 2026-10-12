@@ -11,7 +11,7 @@ bool UserSettings::saveToDisk;
 bool UserSettings::select2ndClip;
 bool UserSettings::showPreview;
 bool UserSettings::pasteOnClick;
-bool UserSettings::autoUpdate;
+bool UserSettings::notifyUpdates;
 std::vector<std::wstring> UserSettings::privateAllowed;
 std::mutex UserSettings::privateAllowedMutex;
 bool UserSettings::saveImages;
@@ -90,7 +90,7 @@ void UserSettings::InitializeSettings()
 	showPreview = SHOW_PREVIEW_DEF;
 	saveImages = SAVE_IMAGES_DEF;
 	pasteOnClick = PASTE_ON_CLICK_DEF;
-	autoUpdate = AUTO_UPDATE_DEF;
+	notifyUpdates = NOTIFY_UPDATES_DEF;
 	// Requested by the project owner; removable in Settings.
 	privateAllowed = { L"1Password.exe" };
 	maxCacheMegabytes = MAX_CACHE_MBYTES_DEF;
@@ -330,16 +330,16 @@ void UserSettings::SetPasteOnClick(bool pasteOnClick)
 	}
 }
 
-bool UserSettings::AutoUpdate()
+bool UserSettings::NotifyUpdates()
 {
-	return UserSettings::autoUpdate;
+	return UserSettings::notifyUpdates;
 }
 
-void UserSettings::SetAutoUpdate(bool autoUpdate)
+void UserSettings::SetNotifyUpdates(bool notifyUpdates)
 {
-	if (autoUpdate != UserSettings::autoUpdate)
+	if (notifyUpdates != UserSettings::notifyUpdates)
 	{
-		UserSettings::autoUpdate = autoUpdate;
+		UserSettings::notifyUpdates = notifyUpdates;
 		UserSettings::SendNotifcation(NTF_AUTOUPDATE_CHANGED, nullptr);
 		SaveSettingsAsync();
 	}
@@ -494,7 +494,7 @@ std::vector<std::wstring> UserSettings::Serialize()
 		(std::to_wstring(SAVE_IMAGES) + SEPARATOR + std::to_wstring(SaveImages())),
 		(std::to_wstring(MAX_CACHE_MBYTES) + SEPARATOR + std::to_wstring(MaxCacheMegabytes())),
 		(std::to_wstring(PASTE_ON_CLICK) + SEPARATOR + std::to_wstring(PasteOnClick())),
-		(std::to_wstring(AUTO_UPDATE) + SEPARATOR + std::to_wstring(AutoUpdate())),
+		(std::to_wstring(NOTIFY_UPDATES) + SEPARATOR + std::to_wstring(NotifyUpdates())),
     };
 
 	std::wstring allowed;
@@ -592,10 +592,10 @@ void UserSettings::Deserialize(std::vector<std::wstring> srData)
     				SetPasteOnClick(result);
     			}
     		break;
-    		case AUTO_UPDATE:
+    		case NOTIFY_UPDATES:
     			{
     				bool result = pair.second.compare(std::to_wstring(true)) == 0;
-    				SetAutoUpdate(result);
+    				SetNotifyUpdates(result);
     			}
     		break;
     		case PRIVATE_ALLOWED:

@@ -31,6 +31,7 @@ private:
 	HICON						trayIcon = nullptr;
 	HICON						blankTrayIcon = nullptr;
 	bool						trayIconVisible = true;
+	std::wstring				notifiedUpdateVersion;
 	
 	ATOM						RegisterMainWindowClass(HINSTANCE hInstance);
 	static LRESULT CALLBACK		MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -48,7 +49,7 @@ private:
 	LRESULT						WmCommandNtfSaveToDiskChanged(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandNtfSaveImagesChanged(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandNtfMaxcacheMBytesChanged(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	LRESULT						WmCommandNtfAutoUpdateChanged(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	LRESULT						WmCommandNtfNotifyUpdatesChanged(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmappUpdateState(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmTimer(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmappNCallNinKeySelect(HWND hWnd, WPARAM wParam, LPARAM lParam);
@@ -69,6 +70,11 @@ private:
 	bool						AddNotificationIcon(HWND hWnd, HINSTANCE hInstance);
 	bool						DeleteNotificationIcon();
 	void						SetNotificationIcon(HICON icon, const wchar_t * tip);
+	void						ShowBalloon(const wchar_t * title, const wchar_t * text);
+	void						StartBlinking(const wchar_t * tip);
+	void						StopBlinking();
+	void						PromptInstallUpdate();
+	LRESULT						WmCommandIdmInstallUpdate(HWND hWnd, WPARAM wParam, LPARAM lParam);
 public:
 								MainWindow(HINSTANCE hInstance, SettingsWindow & settingsWindow);
 								~MainWindow();

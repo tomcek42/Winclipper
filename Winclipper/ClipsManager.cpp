@@ -696,6 +696,11 @@ void ClipsManager::ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit)
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(menu, MF_STRING, CLEARCLIPS_SELECT, L"&Clear Clips");
         AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+		const std::wstring updateVersion = Updater::AvailableVersion();
+		if (!updateVersion.empty())
+		{
+			AppendMenuW(menu, MF_STRING, UPDATE_SELECT, (L"&Install update " + updateVersion + L"...").c_str());
+		}
         AppendMenuW(menu, MF_STRING, SETTINGS_SELECT, L"&Settings");
 		// Debug info
 		//wchar_t str[128];
@@ -745,6 +750,9 @@ void ClipsManager::ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit)
             break;
         case EXIT_SELECT:
 			PostMessageW(hWnd, WM_COMMAND, IDM_EXIT, 0);
+            break;
+        case UPDATE_SELECT:
+			PostMessageW(hWnd, WM_COMMAND, IDM_INSTALL_UPDATE, 0);
             break;
         default:
 			ClipLock = true;

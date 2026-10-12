@@ -1,6 +1,7 @@
 # Updater
 
-Winclipper can install updates automatically ("Install updates automatically" in Settings, off by default).
+Winclipper can notify about new versions ("Notify me about updates" in Settings, off by default) and installs
+one only after the user confirms it. "Check now" in Settings checks once, whether notifications are on or not.
 The upstream updater was removed because it installed unsigned MSIs from the original author's domain (F8).
 This one trusts a signing key, not a server.
 
@@ -15,15 +16,18 @@ This one trusts a signing key, not a server.
    and also stored in `tools/winclipper-update.pub`. Verification uses the vendored Monocypher 4.0.3
    (`Winclipper/monocypher/`), because Windows CNG has no Ed25519.
 3. The manifest version must be higher than the running EXE's version resource. Older signed manifests
-   cannot roll back an installation.
+   cannot roll back an installation. If it is, the tray icon blinks and a notification appears (once per
+   version and session). Clicking the notification, or "Install update …" in the tray menu, opens a dialog
+   with a link to the release notes. Nothing is downloaded until the user clicks "Install"; the install
+   then uses the manifest data verified in this step.
 4. The MSI URL must start with `https://github.com/tomcek42/Winclipper/releases/download/`. The MSI may be
    at most 64 MB, and its SHA-256 must match the manifest.
 5. The MSI is written to `%LOCALAPPDATA%\Winclipper\Winclipper\Update\` and kept open without write or delete
    sharing until msiexec has finished, so it cannot be swapped after the hash check.
 6. `msiexec /i … /passive /norestart` runs. Windows asks for elevation, because the package installs per
    machine. The Restart Manager closes Winclipper and restarts it after the upgrade
-   (`RegisterApplicationRestart`). If the user cancels the elevation prompt, that version is not offered
-   again until the next start.
+   (`RegisterApplicationRestart`). If the user cancels the elevation prompt, the update stays available in
+   the tray menu.
 
 While steps 4 to 6 run, the tray icon blinks and its tooltip reads "Winclipper - installing update".
 Diagnostics go to `OutputDebugString` (view with DebugView).

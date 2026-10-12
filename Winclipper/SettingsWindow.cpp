@@ -106,8 +106,8 @@ LRESULT SettingsWindow::SettingsWndProc(HWND hWnd, UINT message, WPARAM wParam, 
 		case CHK_PASTE_ON_CLICK:
 			lResult = pThis->WmCommandChkPasteOnClick(hWnd, wParam, lParam);
 			break;
-		case CHK_AUTO_UPDATE:
-			lResult = pThis->WmCommandChkAutoUpdate(hWnd, wParam, lParam);
+		case CHK_NOTIFY_UPDATES:
+			lResult = pThis->WmCommandChkNotifyUpdates(hWnd, wParam, lParam);
 			break;
 		case CHK_SAVE_IMAGES:
 			lResult = pThis->WmCommandChkSaveImages(hWnd, wParam, lParam);
@@ -319,13 +319,13 @@ LRESULT SettingsWindow::WmCommandChkPasteOnClick(HWND hWnd, WPARAM wParam, LPARA
 	return 0;
 }
 
-LRESULT SettingsWindow::WmCommandChkAutoUpdate(HWND hWnd, WPARAM wParam, LPARAM lParam)
+LRESULT SettingsWindow::WmCommandChkNotifyUpdates(HWND hWnd, WPARAM wParam, LPARAM lParam)
 {
 	if (HIWORD(wParam) == BN_CLICKED)
 	{
-		bool checkValue = CheckboxAutoUpdate.Value();
-		UserSettings::SetAutoUpdate(!checkValue);
-		CheckboxAutoUpdate.SetValue(!checkValue);
+		bool checkValue = CheckboxNotifyUpdates.Value();
+		UserSettings::SetNotifyUpdates(!checkValue);
+		CheckboxNotifyUpdates.SetValue(!checkValue);
 	}
 	return 0;
 }
@@ -676,13 +676,13 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	SpinnerMaxCacheMbytes.SetMaxValue(UserSettings::MAX_CACHE_MBYTES_UPPER);
 	SpinnerMaxCacheMbytes.ResumeLayout();
 
-	CheckboxAutoUpdate = Controls::Checkbox(hWnd, CHK_AUTO_UPDATE, hInstance);
-	CheckboxAutoUpdate.SuspendLayout();
-	CheckboxAutoUpdate.SetX(10);
-	CheckboxAutoUpdate.SetY(300);
-	CheckboxAutoUpdate.SetText(L"Install updates automatically");
-	CheckboxAutoUpdate.UseBasicTheme = !useLightTheme;
-	CheckboxAutoUpdate.ResumeLayout();
+	CheckboxNotifyUpdates = Controls::Checkbox(hWnd, CHK_NOTIFY_UPDATES, hInstance);
+	CheckboxNotifyUpdates.SuspendLayout();
+	CheckboxNotifyUpdates.SetX(10);
+	CheckboxNotifyUpdates.SetY(300);
+	CheckboxNotifyUpdates.SetText(L"Notify me about updates");
+	CheckboxNotifyUpdates.UseBasicTheme = !useLightTheme;
+	CheckboxNotifyUpdates.ResumeLayout();
 
 	// Load values from user settings
 	SetDlgItemInt(hWnd, TXT_MAX_CLIPS_DISPLAY, UserSettings::MaxDisplayClips(), false);
@@ -704,7 +704,7 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	CheckboxSelectSecondClip.SetValue(UserSettings::Select2ndClip());
 	CheckboxShowPreview.SetValue(UserSettings::ShowPreview());
 	CheckboxPasteOnClick.SetValue(UserSettings::PasteOnClick());
-	CheckboxAutoUpdate.SetValue(UserSettings::AutoUpdate());
+	CheckboxNotifyUpdates.SetValue(UserSettings::NotifyUpdates());
 	CheckboxSaveImages.SetValue(UserSettings::SaveImages());
 	SpinnerMaxCacheMbytes.SetEnabled(UserSettings::SaveImages());
 

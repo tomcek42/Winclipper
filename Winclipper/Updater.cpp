@@ -46,9 +46,11 @@ namespace
 	std::condition_variable stateChanged;
 	HWND notifyWindow = nullptr;
 	bool enabled = false;
-	bool checkSoon = false;
+	bool checkSoon = false;			// periodic check shortly after enabling
+	bool manualCheck = false;		// CheckNow: report the result in any case
+	bool installRequested = false;	// the user confirmed the available version
+	bool installing = false;
 	bool started = false;
-	unsigned long long declinedVersion = 0;
 
 	void Log(const std::wstring & message)
 	{
@@ -354,14 +356,14 @@ namespace
 		return header && haveVersion && haveArch;
 	}
 
-	void PostState(bool busy)
+	void PostState(Updater::State state)
 	{
 		HWND target;
 		{
 			std::lock_guard<std::mutex> lock(stateMutex);
 			target = notifyWindow;
 		}
-		PostMessageW(target, Updater::WMAPP_UPDATE_STATE, busy ? 1 : 0, 0);
+		PostMessageW(target, Updater::WMAPP_UPDATE_STATE, state, 0);
 	}
 
 	// Writes the verified MSI to a new file and keeps it open without write
@@ -434,43 +436,62 @@ namespace
 		return static_cast<long>(exitCode);
 	}
 
-	void CheckAndInstall()
+	// Set by Check after the signature and manifest were verified. Install
+	// only ever uses this, never data fetched after the user's confirmation.
+	UpdateInfo available;
+
+	void Check(bool manual)
 	{
 		const unsigned long long current = OwnVersion();
 		if (current == 0)
 		{
 			Log(L"own version unknown, skipping");
+			if (manual) PostState(Updater::STATE_CHECK_FAILED);
 			return;
 		}
 
 		std::string manifest, signature;
+		UpdateInfo info;
 		if (!HttpGet(MANIFEST_URL, MAX_MANIFEST_BYTES, manifest) || !HttpGet(SIGNATURE_URL, MAX_SIGNATURE_BYTES, signature))
 		{
 			Log(L"no update manifest available");
+			if (manual) PostState(Updater::STATE_CHECK_FAILED);
 			return;
 		}
-		if (!VerifySignature(manifest, signature))
+		if (!VerifySignature(manifest, signature) || !ParseManifest(manifest, info))
 		{
-			Log(L"manifest signature is invalid, ignoring it");
+			Log(L"manifest signature is invalid or the manifest is malformed, ignoring it");
+			if (manual) PostState(Updater::STATE_CHECK_FAILED);
 			return;
 		}
-		UpdateInfo info;
-		if (!ParseManifest(manifest, info))
+		// Never downgrade: an old, validly signed manifest must not roll back fixes.
+		if (info.version <= current)
 		{
-			Log(L"manifest is malformed");
+			if (manual) PostState(Updater::STATE_UP_TO_DATE);
 			return;
 		}
 		{
 			std::lock_guard<std::mutex> lock(stateMutex);
-			// Never downgrade: an old, validly signed manifest must not roll back fixes.
-			if (info.version <= current || info.version == declinedVersion || !enabled)
-			{
-				return;
-			}
+			available = info;
+		}
+		Log(L"version " + VersionString(info.version) + L" is available");
+		PostState(Updater::STATE_AVAILABLE);
+	}
+
+	void Install()
+	{
+		UpdateInfo info;
+		{
+			std::lock_guard<std::mutex> lock(stateMutex);
+			info = available;
+		}
+		if (info.version == 0)
+		{
+			return;
 		}
 
 		Log(L"installing " + VersionString(info.version));
-		PostState(true);
+		PostState(Updater::STATE_INSTALLING);
 
 		std::string msi;
 		std::wstring wideUrl(info.url.begin(), info.url.end());
@@ -483,24 +504,21 @@ namespace
 		if (file == INVALID_HANDLE_VALUE)
 		{
 			Log(L"download failed or hash mismatch");
-			PostState(false);
+			PostState(Updater::STATE_IDLE);
 			return;
 		}
 
+		// On success the Restart Manager closes Winclipper and starts the new
+		// version. If the user cancels the elevation prompt, the update stays
+		// available in the tray menu.
 		const long exitCode = RunMsiexec(msiPath);
 		CloseHandle(file);
 		DeleteFileW(msiPath.c_str());
 		if (exitCode != ERROR_SUCCESS && exitCode != ERROR_SUCCESS_REBOOT_REQUIRED)
 		{
 			Log(L"msiexec failed with " + std::to_wstring(exitCode));
-			if (exitCode == ERROR_INSTALL_USEREXIT)
-			{
-				// The user cancelled the elevation prompt; do not ask again this session.
-				std::lock_guard<std::mutex> lock(stateMutex);
-				declinedVersion = info.version;
-			}
 		}
-		PostState(false);
+		PostState(Updater::STATE_IDLE);
 	}
 
 	void Worker()
@@ -508,31 +526,66 @@ namespace
 		auto next = std::chrono::steady_clock::now() + FIRST_CHECK_DELAY;
 		for (;;)
 		{
+			bool doInstall = false;
+			bool doCheck = false;
+			bool manual = false;
 			{
 				std::unique_lock<std::mutex> lock(stateMutex);
-				stateChanged.wait_until(lock, next, [] { return checkSoon; });
-				if (checkSoon)
+				stateChanged.wait_until(lock, next, [] { return checkSoon || manualCheck || installRequested; });
+				if (installRequested)
+				{
+					installRequested = false;
+					installing = true;
+					doInstall = true;
+				}
+				else if (manualCheck)
+				{
+					manualCheck = false;
+					doCheck = true;
+					manual = true;
+				}
+				else if (checkSoon)
 				{
 					checkSoon = false;
 					next = std::chrono::steady_clock::now() + ENABLED_CHECK_DELAY;
 					continue;
 				}
-				next = std::chrono::steady_clock::now() + CHECK_INTERVAL;
-				if (!enabled)
+				else
 				{
-					continue;
+					next = std::chrono::steady_clock::now() + CHECK_INTERVAL;
+					doCheck = enabled;
 				}
 			}
 			try
 			{
-				CheckAndInstall();
+				if (doInstall)
+				{
+					Install();
+				}
+				else if (doCheck)
+				{
+					Check(manual);
+				}
 			}
 			catch (const std::exception&)
 			{
 				Log(L"unexpected error");
-				PostState(false);
+				PostState(manual ? Updater::STATE_CHECK_FAILED : Updater::STATE_IDLE);
 			}
+			std::lock_guard<std::mutex> lock(stateMutex);
+			installing = false;
 		}
+	}
+
+	// Drops a trailing ".0" like the release tags do (1.6.1.0 -> 1.6.1).
+	std::wstring DisplayVersion(unsigned long long version)
+	{
+		std::wstring text = VersionString(version);
+		if (text.size() > 2 && text.compare(text.size() - 2, 2, L".0") == 0)
+		{
+			text.erase(text.size() - 2);
+		}
+		return text;
 	}
 }
 
@@ -556,4 +609,40 @@ void Updater::SetEnabled(bool newEnabled)
 	}
 	enabled = newEnabled;
 	stateChanged.notify_all();
+}
+
+void Updater::CheckNow()
+{
+	std::lock_guard<std::mutex> lock(stateMutex);
+	manualCheck = true;
+	stateChanged.notify_all();
+}
+
+void Updater::InstallAvailable()
+{
+	std::lock_guard<std::mutex> lock(stateMutex);
+	if (available.version != 0 && !installing)
+	{
+		installRequested = true;
+		stateChanged.notify_all();
+	}
+}
+
+std::wstring Updater::AvailableVersion()
+{
+	std::lock_guard<std::mutex> lock(stateMutex);
+	return available.version == 0 ? std::wstring() : DisplayVersion(available.version);
+}
+
+std::wstring Updater::ReleaseNotesUrl()
+{
+	const std::wstring version = AvailableVersion();
+	return version.empty()
+		? L"https://github.com/tomcek42/Winclipper/releases"
+		: L"https://github.com/tomcek42/Winclipper/releases/tag/v" + version;
+}
+
+std::wstring Updater::CurrentVersion()
+{
+	return DisplayVersion(OwnVersion());
 }

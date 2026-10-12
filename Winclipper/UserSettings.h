@@ -42,8 +42,8 @@
 #define PASTE_ON_CLICK		10
 #define PASTE_ON_CLICK_DEF	true
 
-#define AUTO_UPDATE			11
-#define AUTO_UPDATE_DEF		false
+#define NOTIFY_UPDATES			11
+#define NOTIFY_UPDATES_DEF		false
 
 // Programs whose clipboard content is kept even if it is marked as private
 // (e.g. by a password manager). Stored as file names separated by '/'.
@@ -64,7 +64,7 @@ private:
 	static bool				pasteOnClick;
 	static bool				saveImages;
 	static unsigned int		maxCacheMegabytes;
-	static bool				autoUpdate;
+	static bool				notifyUpdates;
 	static std::vector<std::wstring>	privateAllowed;
 	static std::mutex		privateAllowedMutex;
 
@@ -130,8 +130,8 @@ public:
 	static unsigned int		MaxCacheMegabytes();
 	static void				SetMaxCacheMegabytes(unsigned int maxCacheMegabytes);
 
-	static bool				AutoUpdate();
-	static void				SetAutoUpdate(bool autoUpdate);
+	static bool				NotifyUpdates();
+	static void				SetNotifyUpdates(bool notifyUpdates);
 
 	static const size_t		PRIVATE_ALLOWED_MAX = 50;
 	static bool				IsValidProgramName(const std::wstring & name);

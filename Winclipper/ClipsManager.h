@@ -6,6 +6,7 @@
 #include "RegistryUtilities.h"
 #include "Clip.h"
 #include "ClipsCollection.h"
+#include "Updater.h"
 #include "Shlobj.h"
 #include "Shlwapi.h"
 
@@ -13,6 +14,9 @@
 #define SETTINGS_SELECT     2000    // user selected the Settings option
 #define CLEARCLIPS_SELECT   2001    // clear all clips that are currently saved (doesn't clear the actual clipboard)
 #define EXIT_SELECT         2002    // close the application
+#define UPDATE_SELECT       2003    // install the update the updater found
+#define ABOUT_SELECT        2004    // show the About box
+#define IDM_INSTALL_UPDATE  32790   // WM_COMMAND for UPDATE_SELECT (not a resource)
 #define CLIPS_WRITE_DELAY   2000    
 
                                     // ERROR is returned in any other situation

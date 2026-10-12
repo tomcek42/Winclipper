@@ -3,6 +3,15 @@
 Changes in this fork compared to `Carson-Shook/Winclipper` 1.4.2. Details on each finding:
 `.gsd/SECURITY-FINDINGS.md`.
 
+## Unreleased
+
+### Changes
+- Updates are no longer installed automatically. "Notify me about updates" shows a notification and a blinking
+  tray icon; the update is installed only after confirming it (notification click or "Install update …" in the
+  tray menu). The checks (signature, hash, no downgrade) are unchanged.
+- Content that programs mark as private is kept if the program is on the allow list (1Password by default).
+- The About box shows the real version and the fork's copyright next to the original one.
+
 ## 1.6.0 (2026-10-12)
 
 ### Features

@@ -68,6 +68,9 @@ LRESULT MainWindow::MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		case IDM_SETTINGS:
 			pThis->WmCommandIdmSettings(hWnd, wParam, lParam);
 			break;
+		case IDM_INSTALL_UPDATE:
+			pThis->WmCommandIdmInstallUpdate(hWnd, wParam, lParam);
+			break;
 		case IDM_ABOUT:
 			pThis->WmCommandIdmAbout(hWnd, wParam, lParam);
 			break;
@@ -96,7 +99,7 @@ LRESULT MainWindow::MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			pThis->WmCommandNtfMaxcacheMBytesChanged(hWnd, wParam, lParam);
 			break;
 		case NTF_AUTOUPDATE_CHANGED:
-			pThis->WmCommandNtfAutoUpdateChanged(hWnd, wParam, lParam);
+			pThis->WmCommandNtfNotifyUpdatesChanged(hWnd, wParam, lParam);
 			break;
 		default:
 			return DefWindowProcW(hWnd, message, wParam, lParam);
@@ -115,6 +118,9 @@ LRESULT MainWindow::MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 			break;
 		case WM_CONTEXTMENU:
 			pThis->WmappNCallWmContextMenu(hWnd, wParam, lParam);
+			break;
+		case NIN_BALLOONUSERCLICK:
+			pThis->PromptInstallUpdate();
 			break;
 		}
 		break;
@@ -314,27 +320,127 @@ LRESULT MainWindow::WmCommandNtfMaxcacheMBytesChanged(HWND hWnd, WPARAM wParam, 
 	return 0;
 }
 
-LRESULT MainWindow::WmCommandNtfAutoUpdateChanged(HWND hWnd, WPARAM wParam, LPARAM lParam)
+LRESULT MainWindow::WmCommandNtfNotifyUpdatesChanged(HWND hWnd, WPARAM wParam, LPARAM lParam)
 {
-	Updater::SetEnabled(UserSettings::AutoUpdate());
+	Updater::SetEnabled(UserSettings::NotifyUpdates());
 	return 0;
 }
 
-// The tray icon blinks while an automatic update is downloaded and installed.
+void MainWindow::StartBlinking(const wchar_t * tip)
+{
+	SetTimer(windowHandle, ID_BLINK_TIMER, BLINK_INTERVAL_MS, nullptr);
+	SetNotificationIcon(trayIcon, tip);
+}
+
+void MainWindow::StopBlinking()
+{
+	KillTimer(windowHandle, ID_BLINK_TIMER);
+	trayIconVisible = true;
+	SetNotificationIcon(trayIcon, L"Winclipper");
+}
+
+// A found update makes the tray icon blink and shows a notification once per
+// version; nothing is installed until the user confirms in PromptInstallUpdate.
 LRESULT MainWindow::WmappUpdateState(HWND hWnd, WPARAM wParam, LPARAM lParam)
 {
-	if (wParam)
+	switch (wParam)
 	{
-		SetTimer(hWnd, ID_BLINK_TIMER, BLINK_INTERVAL_MS, nullptr);
-		SetNotificationIcon(trayIcon, L"Winclipper - installing update");
-	}
-	else
-	{
-		KillTimer(hWnd, ID_BLINK_TIMER);
-		trayIconVisible = true;
-		SetNotificationIcon(trayIcon, L"Winclipper");
+	case Updater::STATE_AVAILABLE:
+		{
+			const std::wstring version = Updater::AvailableVersion();
+			if (!version.empty() && version != notifiedUpdateVersion)
+			{
+				notifiedUpdateVersion = version;
+				const std::wstring title = L"Winclipper " + version + L" is available";
+				StartBlinking(title.c_str());
+				ShowBalloon(title.c_str(), L"Click here to see what's new and install it.");
+			}
+		}
+		break;
+	case Updater::STATE_INSTALLING:
+		StartBlinking(L"Winclipper - installing update");
+		break;
+	case Updater::STATE_UP_TO_DATE:
+		MessageBoxW(settingsWindow.GetHandle(), (L"Winclipper " + Updater::CurrentVersion() + L" is up to date.").c_str(),
+			L"Winclipper", MB_OK | MB_ICONINFORMATION);
+		break;
+	case Updater::STATE_CHECK_FAILED:
+		MessageBoxW(settingsWindow.GetHandle(), L"Could not check for updates. Please try again later.",
+			L"Winclipper", MB_OK | MB_ICONWARNING);
+		break;
+	default:
+		StopBlinking();
+		break;
 	}
 	return 0;
+}
+
+static HRESULT CALLBACK UpdateDialogCallback(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, LONG_PTR refData)
+{
+	if (msg == TDN_HYPERLINK_CLICKED)
+	{
+		const wchar_t * url = reinterpret_cast<const wchar_t *>(lParam);
+		// Only the release page link that the dialog itself contains.
+		if (url != nullptr && wcsncmp(url, L"https://github.com/tomcek42/Winclipper/", 39) == 0)
+		{
+			ShellExecuteW(hwnd, L"open", url, nullptr, nullptr, SW_SHOWNORMAL);
+		}
+	}
+	return S_OK;
+}
+
+void MainWindow::PromptInstallUpdate()
+{
+	const std::wstring version = Updater::AvailableVersion();
+	if (version.empty())
+	{
+		return;
+	}
+	StopBlinking();
+
+	const std::wstring instruction = L"Winclipper " + version + L" is available";
+	const std::wstring content = L"You are using version " + Updater::CurrentVersion() + L". <a href=\""
+		+ Updater::ReleaseNotesUrl() + L"\">See what's new</a>\n\nInstalling needs administrator rights. "
+		L"Winclipper closes during the installation and starts again afterwards.";
+	const TASKDIALOG_BUTTON buttons[] = { { IDOK, L"&Install" }, { IDCANCEL, L"&Later" } };
+
+	TASKDIALOGCONFIG config = { sizeof(config) };
+	config.hwndParent = windowHandle;
+	config.hInstance = hInst;
+	config.dwFlags = TDF_ENABLE_HYPERLINKS | TDF_ALLOW_DIALOG_CANCELLATION | TDF_POSITION_RELATIVE_TO_WINDOW;
+	config.pszWindowTitle = L"Winclipper update";
+	config.pszMainIcon = TD_INFORMATION_ICON;
+	config.pszMainInstruction = instruction.c_str();
+	config.pszContent = content.c_str();
+	config.cButtons = ARRAYSIZE(buttons);
+	config.pButtons = buttons;
+	config.nDefaultButton = IDOK;
+	config.pfCallback = UpdateDialogCallback;
+
+	SetForegroundWindow(windowHandle);
+	int pressed = IDCANCEL;
+	if (SUCCEEDED(TaskDialogIndirect(&config, &pressed, nullptr, nullptr)) && pressed == IDOK)
+	{
+		Updater::InstallAvailable();
+	}
+}
+
+LRESULT MainWindow::WmCommandIdmInstallUpdate(HWND hWnd, WPARAM wParam, LPARAM lParam)
+{
+	PromptInstallUpdate();
+	return 0;
+}
+
+void MainWindow::ShowBalloon(const wchar_t * title, const wchar_t * text)
+{
+	NOTIFYICONDATA nid = { sizeof(nid) };
+	nid.hWnd = windowHandle;
+	nid.uID = UID_NOTIFYICON;
+	nid.uFlags = NIF_INFO;
+	nid.dwInfoFlags = NIIF_INFO;
+	wcscpy_s(nid.szInfoTitle, title);
+	wcscpy_s(nid.szInfo, text);
+	Shell_NotifyIcon(NIM_MODIFY, &nid);
 }
 
 LRESULT MainWindow::WmTimer(HWND hWnd, WPARAM wParam, LPARAM lParam)
@@ -460,7 +566,7 @@ LRESULT MainWindow::WmCreate(HWND hWnd, WPARAM wParam, LPARAM lParam)
 	// Lets the Restart Manager start Winclipper again after an update closed it.
 	RegisterApplicationRestart(L"", RESTART_NO_CRASH | RESTART_NO_HANG | RESTART_NO_REBOOT);
 	Updater::Start(hWnd);
-	Updater::SetEnabled(UserSettings::AutoUpdate());
+	Updater::SetEnabled(UserSettings::NotifyUpdates());
 	return 0;
 }
 
