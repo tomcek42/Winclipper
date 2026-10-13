@@ -642,11 +642,14 @@ void ClipsManager::ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit)
         AttachThreadInput(GetWindowThreadProcessId(curWin, nullptr), GetWindowThreadProcessId(hWnd, nullptr), true);
 		HWND actWin = GetActiveWindow();
 
+		// Take the foreground while still attached: only then is Windows
+		// guaranteed to allow it. A menu whose owner is not in the foreground
+		// shows up but ignores hover and clicks.
+        SetForegroundWindow(hWnd);
+
 		// Do not stay attached while the menu is open: with a shared input
 		// queue a busy or hung foreground app stalls the menu's mouse input.
 		AttachThreadInput(GetWindowThreadProcessId(curWin, nullptr), GetWindowThreadProcessId(hWnd, nullptr), false);
-
-        SetForegroundWindow(hWnd);
 
         HMENU menu = CreatePopupMenu();
 
@@ -723,7 +726,6 @@ void ClipsManager::ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit)
 			AppendMenuW(menu, MF_STRING, UPDATE_SELECT, (L"&Install update " + updateVersion + L"...").c_str());
 		}
         AppendMenuW(menu, MF_STRING, SETTINGS_SELECT, L"&Settings");
-        AppendMenuW(menu, MF_STRING, ABOUT_SELECT, L"&About");
 		// Debug info
 		//wchar_t str[128];
 		//wsprintf(str, L"Window handle is 0x%08x", curWin);
@@ -746,6 +748,8 @@ void ClipsManager::ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit)
 		// apparently this line is needed to ensure
 		// consistent popup menu behavior.
 		PostMessageW(hWnd, WM_USER, 0, 0);
+		// Frees the menu and the "More..." submenu; they leaked on every open.
+		DestroyMenu(menu);
 
 		// Re-attach so focus can be handed back to the previous window.
 		AttachThreadInput(GetWindowThreadProcessId(curWin, nullptr), GetWindowThreadProcessId(hWnd, nullptr), true);
@@ -775,9 +779,6 @@ void ClipsManager::ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit)
             break;
         case EXIT_SELECT:
 			PostMessageW(hWnd, WM_COMMAND, IDM_EXIT, 0);
-            break;
-        case ABOUT_SELECT:
-			PostMessageW(hWnd, WM_COMMAND, IDM_ABOUT, 0);
             break;
         case UPDATE_SELECT:
 			PostMessageW(hWnd, WM_COMMAND, IDM_INSTALL_UPDATE, 0);

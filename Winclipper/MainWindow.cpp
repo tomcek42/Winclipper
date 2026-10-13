@@ -618,6 +618,7 @@ LRESULT MainWindow::WmMenuRButtonUp(HWND hWnd, WPARAM wParam, LPARAM lParam)
 		hWnd,
 		nullptr
 	);
+	DestroyMenu(menu);
 
 	if (menuSelection == 1)
 	{

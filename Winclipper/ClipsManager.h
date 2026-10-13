@@ -15,7 +15,6 @@
 #define CLEARCLIPS_SELECT   2001    // clear all clips that are currently saved (doesn't clear the actual clipboard)
 #define EXIT_SELECT         2002    // close the application
 #define UPDATE_SELECT       2003    // install the update the updater found
-#define ABOUT_SELECT        2004    // show the About box
 #define IDM_INSTALL_UPDATE  32790   // WM_COMMAND for UPDATE_SELECT (not a resource)
 #define CLIPS_WRITE_DELAY   2000    
 
