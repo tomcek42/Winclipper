@@ -3,6 +3,20 @@
 Changes in this fork compared to `Carson-Shook/Winclipper` 1.4.2. Details on each finding:
 `.gsd/SECURITY-FINDINGS.md`.
 
+## 1.6.2 (2026-10-13)
+
+### Fixes
+- Installing an update failed (msiexec error 1619) because Winclipper still held the downloaded MSI open for
+  writing. The file is now reopened read-only while staying locked against changes. 1.6.0 and 1.6.1 cannot update
+  themselves; install 1.6.2 manually.
+- The clips menu could stall or stop reacting to clicks: no shared input queue while the menu is open, no endless
+  window walk, no second menu on top of an open one, and Winclipper takes the foreground before showing the menu.
+- Menus are freed after use (handle leak).
+
+### Changes
+- Refreshed Settings window: owner-drawn sidebar, page headings, rounded corners and dark title bar.
+- "About" is no longer in the tray menu; it is a tab in Settings.
+
 ## 1.6.1 (2026-10-12)
 
 ### Changes

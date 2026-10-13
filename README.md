@@ -28,6 +28,12 @@ build an installer on its own, build the EXE first and then run `dotnet build -c
 
 ## Changelog
 
+**1.6.2** - 2026-10-13 (this fork)
+
+- Fixed installing updates (1.6.0 and 1.6.1 cannot update themselves; install 1.6.2 manually).
+- Fixed the clips menu stalling or not reacting to clicks.
+- Refreshed Settings window; About moved from the tray menu to Settings.
+
 **1.6.1** - 2026-10-12 (this fork)
 
 - Updates are offered, not installed automatically: a notification appears and the update installs only after you confirm it.
