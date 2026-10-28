@@ -104,6 +104,15 @@ LRESULT SettingsWindow::SettingsWndProc(HWND hWnd, UINT message, WPARAM wParam, 
 		case LST_PRIVATE_ALLOWED:
 			lResult = pThis->WmCommandLstPrivateAllowed(hWnd, wParam, lParam);
 			break;
+		case BTN_ADD_EXCLUDED:
+			lResult = pThis->WmCommandBtnAddExcluded(hWnd, wParam, lParam);
+			break;
+		case BTN_REMOVE_EXCLUDED:
+			lResult = pThis->WmCommandBtnRemoveExcluded(hWnd, wParam, lParam);
+			break;
+		case LST_EXCLUDED_PROGRAMS:
+			lResult = pThis->WmCommandLstExcluded(hWnd, wParam, lParam);
+			break;
 		case LST_NAVIGATION:
 			lResult = pThis->WmCommandNavigation(hWnd, wParam, lParam);
 			break;
@@ -739,7 +748,8 @@ LRESULT SettingsWindow::WmCommandLstPrivateAllowed(HWND hWnd, WPARAM wParam, LPA
 	return 0;
 }
 
-LRESULT SettingsWindow::WmCommandBtnAddPrivate(HWND hWnd, WPARAM wParam, LPARAM lParam)
+// File name of an .exe the user picks, or empty if cancelled.
+std::wstring SettingsWindow::PickProgramName(HWND hWnd, LPCWSTR title)
 {
 	wchar_t path[MAX_PATH] = L"";
 	OPENFILENAMEW ofn = { sizeof(ofn) };
@@ -747,15 +757,40 @@ LRESULT SettingsWindow::WmCommandBtnAddPrivate(HWND hWnd, WPARAM wParam, LPARAM 
 	ofn.lpstrFilter = L"Programs (*.exe)\0*.exe\0";
 	ofn.lpstrFile = path;
 	ofn.nMaxFile = MAX_PATH;
-	ofn.lpstrTitle = L"Keep private content from this program";
+	ofn.lpstrTitle = title;
 	ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR | OFN_DONTADDTORECENT;
-	if (GetOpenFileNameW(&ofn))
+	return GetOpenFileNameW(&ofn) ? std::wstring(PathFindFileNameW(path)) : std::wstring();
+}
+
+// Text of the selected list box item, or empty if none is selected.
+std::wstring SettingsWindow::SelectedListText(HWND list)
+{
+	const LRESULT index = SendMessageW(list, LB_GETCURSEL, 0, 0);
+	const LRESULT length = index == LB_ERR ? LB_ERR : SendMessageW(list, LB_GETTEXTLEN, index, 0);
+	if (length == LB_ERR)
 	{
-		const std::wstring name = PathFindFileNameW(path);
+		return std::wstring();
+	}
+	std::wstring text(static_cast<size_t>(length) + 1, L'\0');
+	SendMessageW(list, LB_GETTEXT, index, reinterpret_cast<LPARAM>(&text[0]));
+	text.resize(static_cast<size_t>(length));
+	return text;
+}
+
+static void ShowProgramNameRejected(HWND hWnd)
+{
+	MessageBoxW(hWnd, L"This program name cannot be added. Names may only contain letters, digits, spaces and . _ - ( ) +, "
+		L"and the list holds at most 50 programs.", L"Winclipper", MB_OK | MB_ICONWARNING);
+}
+
+LRESULT SettingsWindow::WmCommandBtnAddPrivate(HWND hWnd, WPARAM wParam, LPARAM lParam)
+{
+	const std::wstring name = PickProgramName(hWnd, L"Keep private content from this program");
+	if (!name.empty())
+	{
 		if (!UserSettings::AddPrivateAllowed(name))
 		{
-			MessageBoxW(hWnd, L"This program name cannot be added. Names may only contain letters, digits, spaces and . _ - ( ) +, "
-				L"and the list holds at most 50 programs.", L"Winclipper", MB_OK | MB_ICONWARNING);
+			ShowProgramNameRejected(hWnd);
 		}
 		RefreshPrivateAllowedList();
 	}
@@ -764,15 +799,55 @@ LRESULT SettingsWindow::WmCommandBtnAddPrivate(HWND hWnd, WPARAM wParam, LPARAM 
 
 LRESULT SettingsWindow::WmCommandBtnRemovePrivate(HWND hWnd, WPARAM wParam, LPARAM lParam)
 {
-	const LRESULT index = SendMessageW(privateAllowedList, LB_GETCURSEL, 0, 0);
-	const LRESULT length = index == LB_ERR ? LB_ERR : SendMessageW(privateAllowedList, LB_GETTEXTLEN, index, 0);
-	if (length != LB_ERR)
+	const std::wstring name = SelectedListText(privateAllowedList);
+	if (!name.empty())
 	{
-		std::wstring name(static_cast<size_t>(length) + 1, L'\0');
-		SendMessageW(privateAllowedList, LB_GETTEXT, index, reinterpret_cast<LPARAM>(&name[0]));
-		name.resize(static_cast<size_t>(length));
 		UserSettings::RemovePrivateAllowed(name);
 		RefreshPrivateAllowedList();
+	}
+	return 0;
+}
+
+void SettingsWindow::RefreshExcludedList()
+{
+	SendMessageW(excludedList, LB_RESETCONTENT, 0, 0);
+	for (const auto & name : UserSettings::ExcludedPrograms())
+	{
+		SendMessageW(excludedList, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name.c_str()));
+	}
+	EnableWindow(GetDlgItem(windowHandle, BTN_REMOVE_EXCLUDED), FALSE);
+}
+
+LRESULT SettingsWindow::WmCommandLstExcluded(HWND hWnd, WPARAM wParam, LPARAM lParam)
+{
+	if (HIWORD(wParam) == LBN_SELCHANGE)
+	{
+		EnableWindow(GetDlgItem(hWnd, BTN_REMOVE_EXCLUDED), SendMessageW(excludedList, LB_GETCURSEL, 0, 0) != LB_ERR);
+	}
+	return 0;
+}
+
+LRESULT SettingsWindow::WmCommandBtnAddExcluded(HWND hWnd, WPARAM wParam, LPARAM lParam)
+{
+	const std::wstring name = PickProgramName(hWnd, L"Never record clips from this program");
+	if (!name.empty())
+	{
+		if (!UserSettings::AddExcludedProgram(name))
+		{
+			ShowProgramNameRejected(hWnd);
+		}
+		RefreshExcludedList();
+	}
+	return 0;
+}
+
+LRESULT SettingsWindow::WmCommandBtnRemoveExcluded(HWND hWnd, WPARAM wParam, LPARAM lParam)
+{
+	const std::wstring name = SelectedListText(excludedList);
+	if (!name.empty())
+	{
+		UserSettings::RemoveExcludedProgram(name);
+		RefreshExcludedList();
 	}
 	return 0;
 }
@@ -800,7 +875,7 @@ LRESULT SettingsWindow::WmNotify(HWND hWnd, WPARAM wParam, LPARAM lParam)
 bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 {
 	HWND hWnd = CreateWindowExW(0, szSettingsWindowClass, szTitle, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
-		CW_USEDEFAULT, CW_USEDEFAULT, ScaleX(500), ScaleY(420), nullptr, nullptr, hInstance, this);
+		CW_USEDEFAULT, CW_USEDEFAULT, ScaleX(500), ScaleY(520), nullptr, nullptr, hInstance, this);
 
 	if (!hWnd)
 	{
@@ -938,6 +1013,15 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	SendMessageW(privateAllowedList, WM_SETFONT, reinterpret_cast<WPARAM>(hFontStd), FALSE);
 	AddButton(left + 190, top + 200, 90, L"&Add...", BTN_ADD_PRIVATE, hInstance);
 	AddButton(left + 190, top + 230, 90, L"&Remove", BTN_REMOVE_PRIVATE, hInstance);
+
+	AddText(left, top + 294, 280, 32, L"Never record clips from these programs, whether marked as private or not:",
+		LBL_EXCLUDED_PROGRAMS, hInstance);
+	excludedList = CreateWindowExW(WS_EX_CLIENTEDGE, WC_LISTBOX, nullptr,
+		WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | LBS_NOTIFY | LBS_SORT | LBS_NOINTEGRALHEIGHT,
+		ScaleX(left), ScaleY(top + 328), ScaleX(180), ScaleY(80), hWnd, reinterpret_cast<HMENU>(LST_EXCLUDED_PROGRAMS), hInstance, nullptr);
+	SendMessageW(excludedList, WM_SETFONT, reinterpret_cast<WPARAM>(hFontStd), FALSE);
+	AddButton(left + 190, top + 328, 90, L"A&dd...", BTN_ADD_EXCLUDED, hInstance);
+	AddButton(left + 190, top + 358, 90, L"R&emove", BTN_REMOVE_EXCLUDED, hInstance);
 	AssignNewControlsToPage(PAGE_CLIPS);
 
 	// Images
@@ -1020,6 +1104,7 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	CheckboxSaveImages.SetValue(UserSettings::SaveImages());
 	SpinnerMaxCacheMbytes.SetEnabled(UserSettings::SaveImages());
 	RefreshPrivateAllowedList();
+	RefreshExcludedList();
 
 	SendMessageW(hHotKey, HKM_SETHOTKEY, UserSettings::ClipsMenuHotkey(), 0);
 

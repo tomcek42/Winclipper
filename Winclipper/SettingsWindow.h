@@ -47,6 +47,10 @@
 #define BTN_ADD_PRIVATE         228
 #define BTN_REMOVE_PRIVATE      229
 #define LNK_REPOSITORY          230
+#define LBL_EXCLUDED_PROGRAMS   231
+#define LST_EXCLUDED_PROGRAMS   232
+#define BTN_ADD_EXCLUDED        233
+#define BTN_REMOVE_EXCLUDED     234
 
 
 class SettingsWindow : public Notify
@@ -102,15 +106,22 @@ private:
 	LRESULT						WmCommandLstPrivateAllowed(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandBtnAddPrivate(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandBtnRemovePrivate(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	LRESULT						WmCommandLstExcluded(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	LRESULT						WmCommandBtnAddExcluded(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	LRESULT						WmCommandBtnRemoveExcluded(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandBtnCheckUpdates(HWND hWnd, WPARAM wParam, LPARAM lParam);
 
 	enum Page { PAGE_GENERAL, PAGE_CLIPS, PAGE_IMAGES, PAGE_UPDATES, PAGE_ABOUT, PAGE_COUNT };
 	HWND						navigationList = nullptr;
 	HWND						privateAllowedList = nullptr;
+	HWND						excludedList = nullptr;
 	std::map<HWND, int>			pageOfControl;
 	void						AssignNewControlsToPage(int page);
 	void						ShowPage(int page);
 	void						RefreshPrivateAllowedList();
+	void						RefreshExcludedList();
+	static std::wstring			PickProgramName(HWND hWnd, LPCWSTR title);
+	static std::wstring			SelectedListText(HWND list);
 	HWND						AddButton(int x, int y, int width, LPCWSTR text, UINT_PTR id, HINSTANCE hInstance);
 	HWND						AddText(int x, int y, int width, int height, LPCWSTR text, UINT_PTR id, HINSTANCE hInstance);
 

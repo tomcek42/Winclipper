@@ -49,6 +49,10 @@
 // (e.g. by a password manager). Stored as file names separated by '/'.
 #define PRIVATE_ALLOWED		12
 
+// Programs whose clipboard content is never recorded, marked or not.
+// Same format as PRIVATE_ALLOWED.
+#define EXCLUDED_PROGRAMS	13
+
 // Save and load user settings to and from disk
 class UserSettings : public Notify
 {
@@ -67,6 +71,12 @@ private:
 	static bool				notifyUpdates;
 	static std::vector<std::wstring>	privateAllowed;
 	static std::mutex		privateAllowedMutex;
+	static std::vector<std::wstring>	excludedPrograms;
+	static std::mutex		excludedProgramsMutex;
+
+	static std::vector<std::wstring>	ParseProgramList(const std::wstring & value);
+	static bool				AddToProgramList(std::vector<std::wstring> & list, std::mutex & listMutex, const std::wstring & exeName);
+	static void				RemoveFromProgramList(std::vector<std::wstring> & list, std::mutex & listMutex, const std::wstring & exeName);
 
 	static std::atomic<int>	settingWriterWaitCount;
 	static std::atomic<bool>	isWriterFinished;
@@ -133,12 +143,16 @@ public:
 	static bool				NotifyUpdates();
 	static void				SetNotifyUpdates(bool notifyUpdates);
 
-	static const size_t		PRIVATE_ALLOWED_MAX = 50;
+	static const size_t		PROGRAM_LIST_MAX = 50;
 	static bool				IsValidProgramName(const std::wstring & name);
 	static std::vector<std::wstring>	PrivateAllowedPrograms();
 	static bool				IsPrivateAllowed(const std::wstring & exeName);
 	static bool				AddPrivateAllowed(const std::wstring & exeName);
 	static void				RemovePrivateAllowed(const std::wstring & exeName);
+	static std::vector<std::wstring>	ExcludedPrograms();
+	static bool				IsProgramExcluded(const std::wstring & exeName);
+	static bool				AddExcludedProgram(const std::wstring & exeName);
+	static void				RemoveExcludedProgram(const std::wstring & exeName);
 
 };
 

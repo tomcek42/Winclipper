@@ -404,6 +404,15 @@ bool ClipsManager::AddToClips(HWND hWnd)
 		+ L" owner=" + (ownerExe.empty() ? std::wstring(L"(unknown)") : ownerExe)
 		+ L" formats=" + ClipboardFormatList());
 
+	// Same owner matching as below: content set without an owner window
+	// cannot be attributed and is not caught by this list.
+	if (UserSettings::IsProgramExcluded(ownerExe))
+	{
+		ClipLog(L"skipped: program excluded");
+		CloseClipboard();
+		return true;
+	}
+
 	// Private content is kept only from programs the user allowed explicitly.
 	// The owner is matched by file name, so this is a convenience, not a
 	// security boundary (any process of the user can read the clipboard anyway).

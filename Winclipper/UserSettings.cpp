@@ -14,6 +14,8 @@ bool UserSettings::pasteOnClick;
 bool UserSettings::notifyUpdates;
 std::vector<std::wstring> UserSettings::privateAllowed;
 std::mutex UserSettings::privateAllowedMutex;
+std::vector<std::wstring> UserSettings::excludedPrograms;
+std::mutex UserSettings::excludedProgramsMutex;
 bool UserSettings::saveImages;
 unsigned int UserSettings::maxCacheMegabytes;
 std::atomic<int> UserSettings::settingWriterWaitCount{ 0 };
@@ -93,6 +95,7 @@ void UserSettings::InitializeSettings()
 	notifyUpdates = NOTIFY_UPDATES_DEF;
 	// Requested by the project owner; removable in Settings.
 	privateAllowed = { L"1Password.exe" };
+	excludedPrograms.clear();
 	maxCacheMegabytes = MAX_CACHE_MBYTES_DEF;
 
 	settingWriterWaitCount = 0;
@@ -365,16 +368,10 @@ bool UserSettings::IsValidProgramName(const std::wstring & name)
 	return true;
 }
 
-std::vector<std::wstring> UserSettings::PrivateAllowedPrograms()
+// Shared by the program lists; callers hold the list's mutex.
+static bool ProgramListContains(const std::vector<std::wstring> & list, const std::wstring & exeName)
 {
-	std::lock_guard<std::mutex> lock(privateAllowedMutex);
-	return privateAllowed;
-}
-
-bool UserSettings::IsPrivateAllowed(const std::wstring & exeName)
-{
-	std::lock_guard<std::mutex> lock(privateAllowedMutex);
-	for (const auto & name : privateAllowed)
+	for (const auto & name : list)
 	{
 		if (_wcsicmp(name.c_str(), exeName.c_str()) == 0)
 		{
@@ -384,40 +381,117 @@ bool UserSettings::IsPrivateAllowed(const std::wstring & exeName)
 	return false;
 }
 
-bool UserSettings::AddPrivateAllowed(const std::wstring & exeName)
+static std::wstring JoinProgramList(const std::vector<std::wstring> & list)
+{
+	std::wstring joined;
+	for (const auto & name : list)
+	{
+		if (!joined.empty())
+		{
+			joined += L"/";
+		}
+		joined += name;
+	}
+	return joined;
+}
+
+// Invalid names are dropped; the list is capped.
+std::vector<std::wstring> UserSettings::ParseProgramList(const std::wstring & value)
+{
+	std::vector<std::wstring> names;
+	size_t start = 0;
+	while (start <= value.size() && names.size() < PROGRAM_LIST_MAX)
+	{
+		size_t end = value.find(L'/', start);
+		if (end == std::wstring::npos)
+		{
+			end = value.size();
+		}
+		std::wstring name = value.substr(start, end - start);
+		if (IsValidProgramName(name))
+		{
+			names.push_back(name);
+		}
+		start = end + 1;
+	}
+	return names;
+}
+
+bool UserSettings::AddToProgramList(std::vector<std::wstring> & list, std::mutex & listMutex, const std::wstring & exeName)
 {
 	if (!IsValidProgramName(exeName))
 	{
 		return false;
 	}
 	{
-		std::lock_guard<std::mutex> lock(privateAllowedMutex);
-		for (const auto & name : privateAllowed)
+		std::lock_guard<std::mutex> lock(listMutex);
+		if (ProgramListContains(list, exeName))
 		{
-			if (_wcsicmp(name.c_str(), exeName.c_str()) == 0)
-			{
-				return true;
-			}
+			return true;
 		}
-		if (privateAllowed.size() >= PRIVATE_ALLOWED_MAX)
+		if (list.size() >= PROGRAM_LIST_MAX)
 		{
 			return false;
 		}
-		privateAllowed.push_back(exeName);
+		list.push_back(exeName);
 	}
 	SaveSettingsAsync();
 	return true;
 }
 
-void UserSettings::RemovePrivateAllowed(const std::wstring & exeName)
+void UserSettings::RemoveFromProgramList(std::vector<std::wstring> & list, std::mutex & listMutex, const std::wstring & exeName)
 {
 	{
-		std::lock_guard<std::mutex> lock(privateAllowedMutex);
-		privateAllowed.erase(std::remove_if(privateAllowed.begin(), privateAllowed.end(),
+		std::lock_guard<std::mutex> lock(listMutex);
+		list.erase(std::remove_if(list.begin(), list.end(),
 			[&](const std::wstring & name) { return _wcsicmp(name.c_str(), exeName.c_str()) == 0; }),
-			privateAllowed.end());
+			list.end());
 	}
 	SaveSettingsAsync();
+}
+
+std::vector<std::wstring> UserSettings::PrivateAllowedPrograms()
+{
+	std::lock_guard<std::mutex> lock(privateAllowedMutex);
+	return privateAllowed;
+}
+
+bool UserSettings::IsPrivateAllowed(const std::wstring & exeName)
+{
+	std::lock_guard<std::mutex> lock(privateAllowedMutex);
+	return ProgramListContains(privateAllowed, exeName);
+}
+
+bool UserSettings::AddPrivateAllowed(const std::wstring & exeName)
+{
+	return AddToProgramList(privateAllowed, privateAllowedMutex, exeName);
+}
+
+void UserSettings::RemovePrivateAllowed(const std::wstring & exeName)
+{
+	RemoveFromProgramList(privateAllowed, privateAllowedMutex, exeName);
+}
+
+std::vector<std::wstring> UserSettings::ExcludedPrograms()
+{
+	std::lock_guard<std::mutex> lock(excludedProgramsMutex);
+	return excludedPrograms;
+}
+
+bool UserSettings::IsProgramExcluded(const std::wstring & exeName)
+{
+	std::lock_guard<std::mutex> lock(excludedProgramsMutex);
+	return ProgramListContains(excludedPrograms, exeName);
+}
+
+bool UserSettings::AddExcludedProgram(const std::wstring & exeName)
+{
+	return AddToProgramList(excludedPrograms, excludedProgramsMutex, exeName);
+}
+
+void UserSettings::RemoveExcludedProgram(const std::wstring & exeName)
+{
+	RemoveFromProgramList(excludedPrograms, excludedProgramsMutex, exeName);
 }
 
 bool UserSettings::SaveImages()
@@ -497,16 +571,8 @@ std::vector<std::wstring> UserSettings::Serialize()
 		(std::to_wstring(NOTIFY_UPDATES) + SEPARATOR + std::to_wstring(NotifyUpdates())),
     };
 
-	std::wstring allowed;
-	for (const auto & name : PrivateAllowedPrograms())
-	{
-		if (!allowed.empty())
-		{
-			allowed += L"/";
-		}
-		allowed += name;
-	}
-	retVal.push_back(std::to_wstring(PRIVATE_ALLOWED) + SEPARATOR + allowed);
+	retVal.push_back(std::to_wstring(PRIVATE_ALLOWED) + SEPARATOR + JoinProgramList(PrivateAllowedPrograms()));
+	retVal.push_back(std::to_wstring(EXCLUDED_PROGRAMS) + SEPARATOR + JoinProgramList(ExcludedPrograms()));
 
     return retVal;
 }
@@ -600,25 +666,16 @@ void UserSettings::Deserialize(std::vector<std::wstring> srData)
     		break;
     		case PRIVATE_ALLOWED:
     			{
-    				// Invalid names are dropped; the list is capped.
-    				std::vector<std::wstring> names;
-    				size_t start = 0;
-    				while (start <= pair.second.size() && names.size() < PRIVATE_ALLOWED_MAX)
-    				{
-    					size_t end = pair.second.find(L'/', start);
-    					if (end == std::wstring::npos)
-    					{
-    						end = pair.second.size();
-    					}
-    					std::wstring name = pair.second.substr(start, end - start);
-    					if (IsValidProgramName(name))
-    					{
-    						names.push_back(name);
-    					}
-    					start = end + 1;
-    				}
+    				std::vector<std::wstring> names = ParseProgramList(pair.second);
     				std::lock_guard<std::mutex> lock(privateAllowedMutex);
     				privateAllowed = names;
+    			}
+    		break;
+    		case EXCLUDED_PROGRAMS:
+    			{
+    				std::vector<std::wstring> names = ParseProgramList(pair.second);
+    				std::lock_guard<std::mutex> lock(excludedProgramsMutex);
+    				excludedPrograms = names;
     			}
     		break;
             default:
