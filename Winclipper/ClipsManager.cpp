@@ -360,18 +360,56 @@ static std::wstring ClipboardOwnerExeName()
 	return std::wstring(PathFindFileNameW(path));
 }
 
+// Diagnostics for clips that never show up (view with DebugView). Only
+// owners, formats and results are logged, never clipboard content.
+static void ClipLog(const std::wstring & message)
+{
+	OutputDebugStringW((L"Winclipper clipboard: " + message + L"\r\n").c_str());
+}
+
+// Formats on the clipboard in the owner's order. Must be called with the clipboard open.
+static std::wstring ClipboardFormatList()
+{
+	std::wstring list;
+	UINT format = 0;
+	while ((format = EnumClipboardFormats(format)) != 0)
+	{
+		wchar_t name[128];
+		if (!list.empty())
+		{
+			list += L", ";
+		}
+		if (GetClipboardFormatNameW(format, name, ARRAYSIZE(name)) > 0)
+		{
+			list += name;
+		}
+		else
+		{
+			list += std::to_wstring(format);
+		}
+	}
+	return list.empty() ? L"(none)" : list;
+}
+
 bool ClipsManager::AddToClips(HWND hWnd)
 {
     if (!OpenClipboard(hWnd))
     {
+		ClipLog(L"OpenClipboard failed, error " + std::to_wstring(GetLastError()));
         return false;
     }
+
+	const std::wstring ownerExe = ClipboardOwnerExeName();
+	ClipLog(L"update #" + std::to_wstring(GetClipboardSequenceNumber())
+		+ L" owner=" + (ownerExe.empty() ? std::wstring(L"(unknown)") : ownerExe)
+		+ L" formats=" + ClipboardFormatList());
 
 	// Private content is kept only from programs the user allowed explicitly.
 	// The owner is matched by file name, so this is a convenience, not a
 	// security boundary (any process of the user can read the clipboard anyway).
-	if (ClipboardContentExcluded() && !UserSettings::IsPrivateAllowed(ClipboardOwnerExeName()))
+	if (ClipboardContentExcluded() && !UserSettings::IsPrivateAllowed(ownerExe))
 	{
+		ClipLog(L"skipped: marked as private");
 		CloseClipboard();
 		return true;
 	}
@@ -395,8 +433,12 @@ bool ClipsManager::AddToClips(HWND hWnd)
 			}
 			else
 			{
-				GlobalUnlock(psClipboardData);
+				ClipLog(L"GlobalLock failed for CF_UNICODETEXT");
 			}
+		}
+		else
+		{
+			ClipLog(L"GetClipboardData(CF_UNICODETEXT) returned null, error " + std::to_wstring(GetLastError()));
 		}
 	}
 
@@ -448,8 +490,12 @@ bool ClipsManager::AddToClips(HWND hWnd)
 			else
 			{
 				GlobalUnlock(psClipboardData);
-				
+				ClipLog(L"CF_DIB data rejected");
 			}
+		}
+		else
+		{
+			ClipLog(L"GetClipboardData(CF_DIB) returned null, error " + std::to_wstring(GetLastError()));
 		}
 	}
 
@@ -461,6 +507,7 @@ bool ClipsManager::AddToClips(HWND hWnd)
 	}
 	else
 	{
+		ClipLog(L"skipped: no supported format captured");
 		clip->MarkForDelete();
 	}
     SaveClipsAsync();

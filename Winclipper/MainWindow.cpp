@@ -531,6 +531,8 @@ LRESULT MainWindow::WmClipboardUpdate(HWND hWnd, WPARAM wParam, LPARAM lParam)
 	}
 	else
 	{
+		// The update came from our own SetClipboardData.
+		OutputDebugStringW(L"Winclipper clipboard: skipped own update (ClipLock)\r\n");
 		cManager->ClipLock = false;
 	}
 	return 0;
