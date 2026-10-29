@@ -744,9 +744,10 @@ void SettingsWindow::AddInfoIcon(HWND control, LPCWSTR text, HINSTANCE hInstance
 	// Outlined "info" glyph of the system icon font (Windows 10 and later); thinner than IDI_INFORMATION.
 	static HFONT glyphFont = CreateFontW(-ScaleY(12), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
 		OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe MDL2 Assets");
-	// As tall as the checkbox so SS_CENTERIMAGE centers the glyph on its text line.
+	// As tall as the checkbox so SS_CENTERIMAGE centers the glyph on its text line;
+	// the glyph sits high in its cell, so it is moved down 2 px.
 	HWND icon = CreateWindowExW(0, WC_STATIC, L"\xE946", WS_CHILD | WS_VISIBLE | SS_CENTER | SS_CENTERIMAGE | SS_NOTIFY,
-		rect.right + ScaleX(6), rect.top, size, rect.bottom - rect.top,
+		rect.right + ScaleX(6), rect.top + ScaleY(2), size, rect.bottom - rect.top,
 		windowHandle, reinterpret_cast<HMENU>(ICO_INFO), hInstance, nullptr);
 	SendMessageW(icon, WM_SETFONT, reinterpret_cast<WPARAM>(glyphFont), FALSE);
 
