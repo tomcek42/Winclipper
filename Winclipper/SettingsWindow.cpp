@@ -143,6 +143,9 @@ LRESULT SettingsWindow::SettingsWndProc(HWND hWnd, UINT message, WPARAM wParam, 
 		case CHK_NOTIFY_UPDATES:
 			lResult = pThis->WmCommandChkNotifyUpdates(hWnd, wParam, lParam);
 			break;
+		case CHK_HISTORY_MARKER_IGN:
+			lResult = pThis->WmCommandChkHistoryMarkerIgnored(hWnd, wParam, lParam);
+			break;
 		case CHK_SAVE_IMAGES:
 			lResult = pThis->WmCommandChkSaveImages(hWnd, wParam, lParam);
 			break;
@@ -367,6 +370,17 @@ LRESULT SettingsWindow::WmCommandChkNotifyUpdates(HWND hWnd, WPARAM wParam, LPAR
 		bool checkValue = CheckboxNotifyUpdates.Value();
 		UserSettings::SetNotifyUpdates(!checkValue);
 		CheckboxNotifyUpdates.SetValue(!checkValue);
+	}
+	return 0;
+}
+
+LRESULT SettingsWindow::WmCommandChkHistoryMarkerIgnored(HWND hWnd, WPARAM wParam, LPARAM lParam)
+{
+	if (HIWORD(wParam) == BN_CLICKED)
+	{
+		bool checkValue = CheckboxHistoryMarkerIgnored.Value();
+		UserSettings::SetHistoryMarkerIgnored(!checkValue);
+		CheckboxHistoryMarkerIgnored.SetValue(!checkValue);
 	}
 	return 0;
 }
@@ -875,7 +889,7 @@ LRESULT SettingsWindow::WmNotify(HWND hWnd, WPARAM wParam, LPARAM lParam)
 bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 {
 	HWND hWnd = CreateWindowExW(0, szSettingsWindowClass, szTitle, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
-		CW_USEDEFAULT, CW_USEDEFAULT, ScaleX(500), ScaleY(520), nullptr, nullptr, hInstance, this);
+		CW_USEDEFAULT, CW_USEDEFAULT, ScaleX(500), ScaleY(560), nullptr, nullptr, hInstance, this);
 
 	if (!hWnd)
 	{
@@ -1022,6 +1036,14 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	SendMessageW(excludedList, WM_SETFONT, reinterpret_cast<WPARAM>(hFontStd), FALSE);
 	AddButton(left + 190, top + 328, 90, L"A&dd...", BTN_ADD_EXCLUDED, hInstance);
 	AddButton(left + 190, top + 358, 90, L"R&emove", BTN_REMOVE_EXCLUDED, hInstance);
+
+	CheckboxHistoryMarkerIgnored = Controls::Checkbox(hWnd, CHK_HISTORY_MARKER_IGN, hInstance);
+	CheckboxHistoryMarkerIgnored.SuspendLayout();
+	CheckboxHistoryMarkerIgnored.SetX(left);
+	CheckboxHistoryMarkerIgnored.SetY(top + 422);
+	CheckboxHistoryMarkerIgnored.SetText(L"Record clips from RDP sessions (only hidden from Windows history)");
+	CheckboxHistoryMarkerIgnored.UseBasicTheme = !useLightTheme;
+	CheckboxHistoryMarkerIgnored.ResumeLayout();
 	AssignNewControlsToPage(PAGE_CLIPS);
 
 	// Images
@@ -1101,6 +1123,7 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	CheckboxShowPreview.SetValue(UserSettings::ShowPreview());
 	CheckboxPasteOnClick.SetValue(UserSettings::PasteOnClick());
 	CheckboxNotifyUpdates.SetValue(UserSettings::NotifyUpdates());
+	CheckboxHistoryMarkerIgnored.SetValue(UserSettings::HistoryMarkerIgnored());
 	CheckboxSaveImages.SetValue(UserSettings::SaveImages());
 	SpinnerMaxCacheMbytes.SetEnabled(UserSettings::SaveImages());
 	RefreshPrivateAllowedList();

@@ -53,6 +53,11 @@
 // Same format as PRIVATE_ALLOWED.
 #define EXCLUDED_PROGRAMS	13
 
+// Treat CanIncludeInClipboardHistory=0 alone as not private. RDP marks every
+// clip that way, so without this, clips from RDP sessions are never recorded.
+#define HISTORY_MARKER_IGNORED		14
+#define HISTORY_MARKER_IGNORED_DEF	false
+
 // Save and load user settings to and from disk
 class UserSettings : public Notify
 {
@@ -69,6 +74,7 @@ private:
 	static bool				saveImages;
 	static unsigned int		maxCacheMegabytes;
 	static bool				notifyUpdates;
+	static std::atomic<bool>	historyMarkerIgnored;
 	static std::vector<std::wstring>	privateAllowed;
 	static std::mutex		privateAllowedMutex;
 	static std::vector<std::wstring>	excludedPrograms;
@@ -142,6 +148,9 @@ public:
 
 	static bool				NotifyUpdates();
 	static void				SetNotifyUpdates(bool notifyUpdates);
+
+	static bool				HistoryMarkerIgnored();
+	static void				SetHistoryMarkerIgnored(bool historyMarkerIgnored);
 
 	static const size_t		PROGRAM_LIST_MAX = 50;
 	static bool				IsValidProgramName(const std::wstring & name);

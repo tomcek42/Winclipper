@@ -335,8 +335,11 @@ static bool ClipboardContentExcluded(std::wstring & reason)
 			const DWORD * value = static_cast<const DWORD *>(GlobalLock(hData));
 			if (value != nullptr)
 			{
-				excluded = *value == 0;
-				reason = L"CanIncludeInClipboardHistory=" + std::to_wstring(*value);
+				// The user may opt out of treating this marker alone as private (RDP sets it on every clip).
+				// An unreadable marker stays fail-closed.
+				excluded = *value == 0 && !UserSettings::HistoryMarkerIgnored();
+				reason = L"CanIncludeInClipboardHistory=" + std::to_wstring(*value)
+					+ (*value == 0 && !excluded ? L", ignored by setting" : L"");
 				GlobalUnlock(hData);
 			}
 		}

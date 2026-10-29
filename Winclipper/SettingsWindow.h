@@ -51,6 +51,7 @@
 #define LST_EXCLUDED_PROGRAMS   232
 #define BTN_ADD_EXCLUDED        233
 #define BTN_REMOVE_EXCLUDED     234
+#define CHK_HISTORY_MARKER_IGN  235
 
 
 class SettingsWindow : public Notify
@@ -90,6 +91,7 @@ private:
 	LRESULT						WmCommandChkShowPreview(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandChkPasteOnClick(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandChkNotifyUpdates(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	LRESULT						WmCommandChkHistoryMarkerIgnored(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandChkSaveImages(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandTxtMaxImageCacheMb(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandHkyShowClipsMenu(HWND hWnd, WPARAM wParam, LPARAM lParam);
@@ -138,6 +140,7 @@ private:
 	Controls::Checkbox			CheckboxShowPreview;
 	Controls::Checkbox			CheckboxPasteOnClick;
 	Controls::Checkbox			CheckboxNotifyUpdates;
+	Controls::Checkbox			CheckboxHistoryMarkerIgnored;
 	Controls::Checkbox			CheckboxSaveImages;
 	Controls::Label				LabelMaxCacheMbytes;
 	Controls::Spinner			SpinnerMaxCacheMbytes;

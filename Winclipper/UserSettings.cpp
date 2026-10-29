@@ -12,6 +12,7 @@ bool UserSettings::select2ndClip;
 bool UserSettings::showPreview;
 bool UserSettings::pasteOnClick;
 bool UserSettings::notifyUpdates;
+std::atomic<bool> UserSettings::historyMarkerIgnored{ HISTORY_MARKER_IGNORED_DEF };
 std::vector<std::wstring> UserSettings::privateAllowed;
 std::mutex UserSettings::privateAllowedMutex;
 std::vector<std::wstring> UserSettings::excludedPrograms;
@@ -93,6 +94,7 @@ void UserSettings::InitializeSettings()
 	saveImages = SAVE_IMAGES_DEF;
 	pasteOnClick = PASTE_ON_CLICK_DEF;
 	notifyUpdates = NOTIFY_UPDATES_DEF;
+	historyMarkerIgnored = HISTORY_MARKER_IGNORED_DEF;
 	// Requested by the project owner; removable in Settings.
 	privateAllowed = { L"1Password.exe" };
 	excludedPrograms.clear();
@@ -348,6 +350,20 @@ void UserSettings::SetNotifyUpdates(bool notifyUpdates)
 	}
 }
 
+bool UserSettings::HistoryMarkerIgnored()
+{
+	return UserSettings::historyMarkerIgnored;
+}
+
+void UserSettings::SetHistoryMarkerIgnored(bool historyMarkerIgnored)
+{
+	if (historyMarkerIgnored != UserSettings::historyMarkerIgnored)
+	{
+		UserSettings::historyMarkerIgnored = historyMarkerIgnored;
+		SaveSettingsAsync();
+	}
+}
+
 // Only bare file names of printable ASCII (no path, no separator): settings.dat
 // is untrusted and written through a narrow stream.
 bool UserSettings::IsValidProgramName(const std::wstring & name)
@@ -569,6 +585,7 @@ std::vector<std::wstring> UserSettings::Serialize()
 		(std::to_wstring(MAX_CACHE_MBYTES) + SEPARATOR + std::to_wstring(MaxCacheMegabytes())),
 		(std::to_wstring(PASTE_ON_CLICK) + SEPARATOR + std::to_wstring(PasteOnClick())),
 		(std::to_wstring(NOTIFY_UPDATES) + SEPARATOR + std::to_wstring(NotifyUpdates())),
+		(std::to_wstring(HISTORY_MARKER_IGNORED) + SEPARATOR + std::to_wstring(HistoryMarkerIgnored())),
     };
 
 	retVal.push_back(std::to_wstring(PRIVATE_ALLOWED) + SEPARATOR + JoinProgramList(PrivateAllowedPrograms()));
@@ -662,6 +679,12 @@ void UserSettings::Deserialize(std::vector<std::wstring> srData)
     			{
     				bool result = pair.second.compare(std::to_wstring(true)) == 0;
     				SetNotifyUpdates(result);
+    			}
+    		break;
+    		case HISTORY_MARKER_IGNORED:
+    			{
+    				bool result = pair.second.compare(std::to_wstring(true)) == 0;
+    				SetHistoryMarkerIgnored(result);
     			}
     		break;
     		case PRIVATE_ALLOWED:
