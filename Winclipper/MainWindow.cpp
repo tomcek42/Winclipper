@@ -357,18 +357,20 @@ LRESULT MainWindow::WmappUpdateState(HWND hWnd, WPARAM wParam, LPARAM lParam)
 				StartBlinking(title.c_str());
 				ShowBalloon(title.c_str(), L"Click here to see what's new and install it.");
 			}
+			if (!version.empty())
+			{
+				settingsWindow.SetUpdateStatus(L"Winclipper " + version + L" is available. Click the tray icon to install it.");
+			}
 		}
 		break;
 	case Updater::STATE_INSTALLING:
 		StartBlinking(L"Winclipper - installing update");
 		break;
 	case Updater::STATE_UP_TO_DATE:
-		MessageBoxW(settingsWindow.GetHandle(), (L"Winclipper " + Updater::CurrentVersion() + L" is up to date.").c_str(),
-			L"Winclipper", MB_OK | MB_ICONINFORMATION);
+		settingsWindow.SetUpdateStatus(L"Winclipper " + Updater::CurrentVersion() + L" is up to date.");
 		break;
 	case Updater::STATE_CHECK_FAILED:
-		MessageBoxW(settingsWindow.GetHandle(), L"Could not check for updates. Please try again later.",
-			L"Winclipper", MB_OK | MB_ICONWARNING);
+		settingsWindow.SetUpdateStatus(L"Could not check for updates. Please try again later.");
 		break;
 	default:
 		StopBlinking();

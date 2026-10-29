@@ -51,6 +51,7 @@
 #define LST_EXCLUDED_PROGRAMS   232
 #define BTN_ADD_EXCLUDED        233
 #define BTN_REMOVE_EXCLUDED     234
+#define LBL_UPDATE_STATUS       236
 #define CHK_HISTORY_MARKER_IGN  235
 
 
@@ -153,5 +154,7 @@ public:
 
 	bool						InitSettingsWindow(HINSTANCE hInstance);
 	HWND						GetHandle() noexcept;
+	// Result of "Check now", shown below the button instead of a message box.
+	void						SetUpdateStatus(const std::wstring & text);
 };
 

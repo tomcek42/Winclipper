@@ -868,8 +868,14 @@ LRESULT SettingsWindow::WmCommandBtnRemoveExcluded(HWND hWnd, WPARAM wParam, LPA
 
 LRESULT SettingsWindow::WmCommandBtnCheckUpdates(HWND hWnd, WPARAM wParam, LPARAM lParam)
 {
+	SetUpdateStatus(L"Checking for updates...");
 	Updater::CheckNow();
 	return 0;
+}
+
+void SettingsWindow::SetUpdateStatus(const std::wstring & text)
+{
+	SetDlgItemTextW(windowHandle, LBL_UPDATE_STATUS, text.c_str());
 }
 
 LRESULT SettingsWindow::WmNotify(HWND hWnd, WPARAM wParam, LPARAM lParam)
@@ -1088,6 +1094,7 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 		IDC_STATIC, hInstance);
 	AddText(left, top + 84, 280, 16, L"Installed version:", LBL_INSTALLED_VERSION, hInstance);
 	AddButton(left, top + 108, 110, L"Check &now", BTN_CHECK_UPDATES, hInstance);
+	AddText(left, top + 140, 280, 32, L"", LBL_UPDATE_STATUS, hInstance);
 	AssignNewControlsToPage(PAGE_UPDATES);
 
 	// About
