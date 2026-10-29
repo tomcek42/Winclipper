@@ -24,7 +24,7 @@ bool Controls::Checkbox::Create()
 	handle = CreateWindowExW(WS_EX_LEFT | WS_EX_NOACTIVATE,
 		WC_BUTTON,
 		text,
-		WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_CHECKBOX,
+		WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_CHECKBOX | (wcschr(text, L'\n') != nullptr ? BS_MULTILINE : 0),
 		DpiScaleX(x), DpiScaleY(y),
 		finalWidth, finalHeight,
 		parentHandle,

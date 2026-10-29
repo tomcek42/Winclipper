@@ -889,7 +889,7 @@ LRESULT SettingsWindow::WmNotify(HWND hWnd, WPARAM wParam, LPARAM lParam)
 bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 {
 	HWND hWnd = CreateWindowExW(0, szSettingsWindowClass, szTitle, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
-		CW_USEDEFAULT, CW_USEDEFAULT, ScaleX(500), ScaleY(560), nullptr, nullptr, hInstance, this);
+		CW_USEDEFAULT, CW_USEDEFAULT, ScaleX(500), ScaleY(590), nullptr, nullptr, hInstance, this);
 
 	if (!hWnd)
 	{
@@ -1041,7 +1041,7 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	CheckboxHistoryMarkerIgnored.SuspendLayout();
 	CheckboxHistoryMarkerIgnored.SetX(left);
 	CheckboxHistoryMarkerIgnored.SetY(top + 422);
-	CheckboxHistoryMarkerIgnored.SetText(L"Record clips from RDP sessions (only hidden from Windows history)");
+	CheckboxHistoryMarkerIgnored.SetText(L"Record clips from RDP sessions (only hidden\nfrom Windows history)");
 	CheckboxHistoryMarkerIgnored.UseBasicTheme = !useLightTheme;
 	CheckboxHistoryMarkerIgnored.ResumeLayout();
 	AssignNewControlsToPage(PAGE_CLIPS);
