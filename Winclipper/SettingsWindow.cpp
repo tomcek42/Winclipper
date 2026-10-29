@@ -737,14 +737,13 @@ void SettingsWindow::AddInfoIcon(HWND control, LPCWSTR text, HINSTANCE hInstance
 	GetWindowRect(control, &rect);
 	MapWindowPoints(HWND_DESKTOP, windowHandle, reinterpret_cast<LPPOINT>(&rect), 2);
 	const int size = ScaleX(16);
-	HWND icon = CreateWindowExW(0, WC_STATIC, nullptr, WS_CHILD | WS_VISIBLE | SS_ICON | SS_REALSIZECONTROL | SS_NOTIFY,
+	// Outlined "info" glyph of the system icon font (Windows 10 and later); thinner than IDI_INFORMATION.
+	static HFONT glyphFont = CreateFontW(-ScaleY(12), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+		OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe MDL2 Assets");
+	HWND icon = CreateWindowExW(0, WC_STATIC, L"\xE946", WS_CHILD | WS_VISIBLE | SS_CENTER | SS_CENTERIMAGE | SS_NOTIFY,
 		rect.right + ScaleX(6), rect.top + (rect.bottom - rect.top - size) / 2, size, size,
 		windowHandle, nullptr, hInstance, nullptr);
-	HICON hIcon = nullptr;
-	if (SUCCEEDED(LoadIconWithScaleDown(nullptr, IDI_INFORMATION, size, size, &hIcon)))
-	{
-		SendMessageW(icon, STM_SETICON, reinterpret_cast<WPARAM>(hIcon), 0);
-	}
+	SendMessageW(icon, WM_SETFONT, reinterpret_cast<WPARAM>(glyphFont), FALSE);
 
 	HWND tooltip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr, WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
 		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, windowHandle, nullptr, hInstance, nullptr);
