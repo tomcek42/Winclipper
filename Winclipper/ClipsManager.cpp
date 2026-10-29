@@ -351,13 +351,11 @@ static bool ClipboardContentExcluded(std::wstring & reason)
 	return excluded;
 }
 
-// File name of the program that owns the clipboard, or empty if it cannot be
-// determined (e.g. content set without an owner window).
-static std::wstring ClipboardOwnerExeName()
+// File name of the program that created the window, or empty if unknown.
+static std::wstring WindowExeName(HWND window)
 {
-	HWND owner = GetClipboardOwner();
 	DWORD processId = 0;
-	if (owner == nullptr || GetWindowThreadProcessId(owner, &processId) == 0 || processId == 0)
+	if (window == nullptr || GetWindowThreadProcessId(window, &processId) == 0 || processId == 0)
 	{
 		return std::wstring();
 	}
@@ -375,6 +373,22 @@ static std::wstring ClipboardOwnerExeName()
 		return std::wstring();
 	}
 	return std::wstring(PathFindFileNameW(path));
+}
+
+// File name of the program that owns the clipboard. Some programs (e.g. 1Password)
+// set content without an owner window; then the foreground program is assumed,
+// since copying usually happens there. That guess is marked by fromForeground.
+static std::wstring ClipboardOwnerExeName(bool & fromForeground)
+{
+	fromForeground = false;
+	HWND owner = GetClipboardOwner();
+	if (owner != nullptr)
+	{
+		return WindowExeName(owner);
+	}
+	std::wstring name = WindowExeName(GetForegroundWindow());
+	fromForeground = !name.empty();
+	return name;
 }
 
 // Diagnostics for clips that never show up (view with DebugView). Only
@@ -416,13 +430,15 @@ bool ClipsManager::AddToClips(HWND hWnd)
         return false;
     }
 
-	const std::wstring ownerExe = ClipboardOwnerExeName();
+	bool ownerFromForeground = false;
+	const std::wstring ownerExe = ClipboardOwnerExeName(ownerFromForeground);
 	ClipLog(L"update #" + std::to_wstring(GetClipboardSequenceNumber())
 		+ L" owner=" + (ownerExe.empty() ? std::wstring(L"(unknown)") : ownerExe)
+		+ (ownerFromForeground ? L" (foreground)" : L"")
 		+ L" formats=" + ClipboardFormatList());
 
-	// Same owner matching as below: content set without an owner window
-	// cannot be attributed and is not caught by this list.
+	// Same owner matching as below: content that cannot be attributed
+	// (no owner window and no foreground program) is not caught by this list.
 	if (UserSettings::IsProgramExcluded(ownerExe))
 	{
 		ClipLog(L"skipped: program excluded");
@@ -431,8 +447,8 @@ bool ClipsManager::AddToClips(HWND hWnd)
 	}
 
 	// Private content is kept only from programs the user allowed explicitly.
-	// The owner is matched by file name, so this is a convenience, not a
-	// security boundary (any process of the user can read the clipboard anyway).
+	// The owner is matched by file name (or guessed from the foreground window),
+	// so this is a convenience, not a security boundary (any process of the user can read the clipboard anyway).
 	std::wstring privateReason;
 	if (ClipboardContentExcluded(privateReason) && !UserSettings::IsPrivateAllowed(ownerExe))
 	{
