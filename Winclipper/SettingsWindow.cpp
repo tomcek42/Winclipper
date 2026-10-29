@@ -492,6 +492,10 @@ LRESULT SettingsWindow::WmCtlColorStatic(HWND hWnd, WPARAM wParam, LPARAM lParam
 	{
 		SetTextColor(hdcStatic, FOREGROUND_COLOR_DARK);
 	}
+	if (GetDlgCtrlID(reinterpret_cast<HWND>(lParam)) == ICO_INFO)
+	{
+		SetTextColor(hdcStatic, AccentColor());
+	}
 
 	if (hbrBkgnd == NULL)
 	{
@@ -740,9 +744,10 @@ void SettingsWindow::AddInfoIcon(HWND control, LPCWSTR text, HINSTANCE hInstance
 	// Outlined "info" glyph of the system icon font (Windows 10 and later); thinner than IDI_INFORMATION.
 	static HFONT glyphFont = CreateFontW(-ScaleY(12), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
 		OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe MDL2 Assets");
+	// As tall as the checkbox so SS_CENTERIMAGE centers the glyph on its text line.
 	HWND icon = CreateWindowExW(0, WC_STATIC, L"\xE946", WS_CHILD | WS_VISIBLE | SS_CENTER | SS_CENTERIMAGE | SS_NOTIFY,
-		rect.right + ScaleX(6), rect.top + (rect.bottom - rect.top - size) / 2, size, size,
-		windowHandle, nullptr, hInstance, nullptr);
+		rect.right + ScaleX(6), rect.top, size, rect.bottom - rect.top,
+		windowHandle, reinterpret_cast<HMENU>(ICO_INFO), hInstance, nullptr);
 	SendMessageW(icon, WM_SETFONT, reinterpret_cast<WPARAM>(glyphFont), FALSE);
 
 	HWND tooltip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr, WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,

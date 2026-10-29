@@ -54,6 +54,7 @@
 #define LBL_UPDATE_STATUS       236
 #define CHK_HISTORY_MARKER_IGN  235
 #define BTN_INSTALL_UPDATE      237
+#define ICO_INFO                238
 
 
 class SettingsWindow : public Notify
