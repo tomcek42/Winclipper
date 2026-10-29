@@ -730,6 +730,34 @@ LRESULT SettingsWindow::WmDrawItem(HWND hWnd, WPARAM wParam, LPARAM lParam)
 	return TRUE;
 }
 
+// Small information icon right of control that explains it in a tooltip on hover.
+void SettingsWindow::AddInfoIcon(HWND control, LPCWSTR text, HINSTANCE hInstance)
+{
+	RECT rect;
+	GetWindowRect(control, &rect);
+	MapWindowPoints(HWND_DESKTOP, windowHandle, reinterpret_cast<LPPOINT>(&rect), 2);
+	const int size = ScaleX(16);
+	HWND icon = CreateWindowExW(0, WC_STATIC, nullptr, WS_CHILD | WS_VISIBLE | SS_ICON | SS_REALSIZECONTROL | SS_NOTIFY,
+		rect.right + ScaleX(6), rect.top + (rect.bottom - rect.top - size) / 2, size, size,
+		windowHandle, nullptr, hInstance, nullptr);
+	HICON hIcon = nullptr;
+	if (SUCCEEDED(LoadIconWithScaleDown(nullptr, IDI_INFORMATION, size, size, &hIcon)))
+	{
+		SendMessageW(icon, STM_SETICON, reinterpret_cast<WPARAM>(hIcon), 0);
+	}
+
+	HWND tooltip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr, WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
+		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, windowHandle, nullptr, hInstance, nullptr);
+	TOOLINFOW info = { sizeof(info) };
+	info.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
+	info.hwnd = windowHandle;
+	info.uId = reinterpret_cast<UINT_PTR>(icon);
+	info.lpszText = const_cast<LPWSTR>(text);
+	SendMessageW(tooltip, TTM_ADDTOOLW, 0, reinterpret_cast<LPARAM>(&info));
+	SendMessageW(tooltip, TTM_SETMAXTIPWIDTH, 0, ScaleX(300));
+	SendMessageW(tooltip, TTM_SETDELAYTIME, TTDT_AUTOPOP, 30000);
+}
+
 HWND SettingsWindow::AddText(int x, int y, int width, int height, LPCWSTR text, UINT_PTR id, HINSTANCE hInstance)
 {
 	HWND label = CreateWindowExW(0, WC_STATIC, text, WS_CHILD | WS_VISIBLE | SS_NOPREFIX,
@@ -913,7 +941,7 @@ LRESULT SettingsWindow::WmNotify(HWND hWnd, WPARAM wParam, LPARAM lParam)
 bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 {
 	HWND hWnd = CreateWindowExW(0, szSettingsWindowClass, szTitle, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
-		CW_USEDEFAULT, CW_USEDEFAULT, ScaleX(500), ScaleY(590), nullptr, nullptr, hInstance, this);
+		CW_USEDEFAULT, CW_USEDEFAULT, ScaleX(500), ScaleY(610), nullptr, nullptr, hInstance, this);
 
 	if (!hWnd)
 	{
@@ -1036,35 +1064,39 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	CheckboxSaveToDisk = Controls::Checkbox(hWnd, CHK_SAVE_TO_DISK, hInstance);
 	CheckboxSaveToDisk.SuspendLayout();
 	CheckboxSaveToDisk.SetX(left);
-	CheckboxSaveToDisk.SetY(top + 102);
+	CheckboxSaveToDisk.SetY(top + 118);
 	CheckboxSaveToDisk.SetText(L"Save clips to disk");
 	CheckboxSaveToDisk.UseBasicTheme = !useLightTheme;
 	CheckboxSaveToDisk.ResumeLayout();
+	AddInfoIcon(GetDlgItem(hWnd, CHK_SAVE_TO_DISK),
+		L"On: clips are kept when Winclipper or Windows restarts. They are stored encrypted for your "
+		L"Windows account in your user profile.\r\nOff: clips are kept only in memory and the saved clips are deleted.",
+		hInstance);
 
-	AddButton(left, top + 128, 110, L"&Clear clips", BTN_CLEAR_CLIPS, hInstance);
+	AddButton(left, top + 144, 110, L"&Clear clips", BTN_CLEAR_CLIPS, hInstance);
 
-	AddText(left, top + 166, 280, 32, L"Always record clips from these programs, even if marked as private (e.g. passwords):",
+	AddText(left, top + 196, 280, 32, L"Always record clips from these programs, even if marked as private (e.g. passwords):",
 		LBL_PRIVATE_ALLOWED, hInstance);
 	privateAllowedList = CreateWindowExW(WS_EX_CLIENTEDGE, WC_LISTBOX, nullptr,
 		WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | LBS_NOTIFY | LBS_SORT | LBS_NOINTEGRALHEIGHT,
-		ScaleX(left), ScaleY(top + 200), ScaleX(180), ScaleY(80), hWnd, reinterpret_cast<HMENU>(LST_PRIVATE_ALLOWED), hInstance, nullptr);
+		ScaleX(left), ScaleY(top + 230), ScaleX(180), ScaleY(80), hWnd, reinterpret_cast<HMENU>(LST_PRIVATE_ALLOWED), hInstance, nullptr);
 	SendMessageW(privateAllowedList, WM_SETFONT, reinterpret_cast<WPARAM>(hFontStd), FALSE);
-	AddButton(left + 190, top + 200, 90, L"&Add...", BTN_ADD_PRIVATE, hInstance);
-	AddButton(left + 190, top + 230, 90, L"&Remove", BTN_REMOVE_PRIVATE, hInstance);
+	AddButton(left + 190, top + 230, 90, L"&Add...", BTN_ADD_PRIVATE, hInstance);
+	AddButton(left + 190, top + 260, 90, L"&Remove", BTN_REMOVE_PRIVATE, hInstance);
 
-	AddText(left, top + 294, 280, 32, L"Never record clips from these programs:",
+	AddText(left, top + 324, 280, 16, L"Never record clips from these programs:",
 		LBL_EXCLUDED_PROGRAMS, hInstance);
 	excludedList = CreateWindowExW(WS_EX_CLIENTEDGE, WC_LISTBOX, nullptr,
 		WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | LBS_NOTIFY | LBS_SORT | LBS_NOINTEGRALHEIGHT,
-		ScaleX(left), ScaleY(top + 328), ScaleX(180), ScaleY(80), hWnd, reinterpret_cast<HMENU>(LST_EXCLUDED_PROGRAMS), hInstance, nullptr);
+		ScaleX(left), ScaleY(top + 344), ScaleX(180), ScaleY(80), hWnd, reinterpret_cast<HMENU>(LST_EXCLUDED_PROGRAMS), hInstance, nullptr);
 	SendMessageW(excludedList, WM_SETFONT, reinterpret_cast<WPARAM>(hFontStd), FALSE);
-	AddButton(left + 190, top + 328, 90, L"A&dd...", BTN_ADD_EXCLUDED, hInstance);
-	AddButton(left + 190, top + 358, 90, L"R&emove", BTN_REMOVE_EXCLUDED, hInstance);
+	AddButton(left + 190, top + 344, 90, L"A&dd...", BTN_ADD_EXCLUDED, hInstance);
+	AddButton(left + 190, top + 374, 90, L"R&emove", BTN_REMOVE_EXCLUDED, hInstance);
 
 	CheckboxHistoryMarkerIgnored = Controls::Checkbox(hWnd, CHK_HISTORY_MARKER_IGN, hInstance);
 	CheckboxHistoryMarkerIgnored.SuspendLayout();
 	CheckboxHistoryMarkerIgnored.SetX(left);
-	CheckboxHistoryMarkerIgnored.SetY(top + 422);
+	CheckboxHistoryMarkerIgnored.SetY(top + 438);
 	CheckboxHistoryMarkerIgnored.SetText(L"Record clips from RDP sessions (only hidden\nfrom Windows history)");
 	CheckboxHistoryMarkerIgnored.UseBasicTheme = !useLightTheme;
 	CheckboxHistoryMarkerIgnored.ResumeLayout();

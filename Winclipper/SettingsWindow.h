@@ -128,6 +128,7 @@ private:
 	static std::wstring			PickProgramName(HWND hWnd, LPCWSTR title);
 	static std::wstring			SelectedListText(HWND list);
 	HWND						AddButton(int x, int y, int width, LPCWSTR text, UINT_PTR id, HINSTANCE hInstance);
+	void						AddInfoIcon(HWND control, LPCWSTR text, HINSTANCE hInstance);
 	HWND						AddText(int x, int y, int width, int height, LPCWSTR text, UINT_PTR id, HINSTANCE hInstance);
 
 	Controls::Label				LabelMaxClipsDisplay;
