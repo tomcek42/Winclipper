@@ -300,18 +300,26 @@ static bool CopyClipboardDib(const BYTE * data, SIZE_T available, bool forceOpaq
 	return true;
 }
 
+static void ClipLog(const std::wstring & message);
+
 // Password managers and other apps mark sensitive content with these formats
 // so that clipboard history tools skip it. Must be called with the clipboard open.
+// reason names the marker that matched (for the diagnostics log).
 // See: https://learn.microsoft.com/windows/win32/dataxchg/clipboard-formats#cloud-clipboard-and-clipboard-history-formats
-static bool ClipboardContentExcluded()
+static bool ClipboardContentExcluded(std::wstring & reason)
 {
 	static const UINT excludeFormat = RegisterClipboardFormatW(L"ExcludeClipboardContentFromMonitorProcessing");
 	static const UINT viewerIgnoreFormat = RegisterClipboardFormatW(L"Clipboard Viewer Ignore");
 	static const UINT historyFormat = RegisterClipboardFormatW(L"CanIncludeInClipboardHistory");
 
-	if ((excludeFormat != 0 && IsClipboardFormatAvailable(excludeFormat))
-		|| (viewerIgnoreFormat != 0 && IsClipboardFormatAvailable(viewerIgnoreFormat)))
+	if (excludeFormat != 0 && IsClipboardFormatAvailable(excludeFormat))
 	{
+		reason = L"ExcludeClipboardContentFromMonitorProcessing";
+		return true;
+	}
+	if (viewerIgnoreFormat != 0 && IsClipboardFormatAvailable(viewerIgnoreFormat))
+	{
+		reason = L"Clipboard Viewer Ignore";
 		return true;
 	}
 
@@ -321,14 +329,20 @@ static bool ClipboardContentExcluded()
 		HANDLE hData = GetClipboardData(historyFormat);
 		// Fail closed: an unreadable marker still means the owner set it.
 		excluded = true;
+		reason = L"CanIncludeInClipboardHistory unreadable";
 		if (hData != nullptr && GlobalSize(hData) >= sizeof(DWORD))
 		{
 			const DWORD * value = static_cast<const DWORD *>(GlobalLock(hData));
 			if (value != nullptr)
 			{
 				excluded = *value == 0;
+				reason = L"CanIncludeInClipboardHistory=" + std::to_wstring(*value);
 				GlobalUnlock(hData);
 			}
+		}
+		if (!excluded)
+		{
+			ClipLog(L"not private: " + reason);
 		}
 	}
 	return excluded;
@@ -416,9 +430,10 @@ bool ClipsManager::AddToClips(HWND hWnd)
 	// Private content is kept only from programs the user allowed explicitly.
 	// The owner is matched by file name, so this is a convenience, not a
 	// security boundary (any process of the user can read the clipboard anyway).
-	if (ClipboardContentExcluded() && !UserSettings::IsPrivateAllowed(ownerExe))
+	std::wstring privateReason;
+	if (ClipboardContentExcluded(privateReason) && !UserSettings::IsPrivateAllowed(ownerExe))
 	{
-		ClipLog(L"skipped: marked as private");
+		ClipLog(L"skipped: marked as private (" + privateReason + L")");
 		CloseClipboard();
 		return true;
 	}
