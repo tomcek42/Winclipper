@@ -1,7 +1,7 @@
 # Winclipper
 
-[![GitHub Release](https://img.shields.io/github/release/tomcek42/Winclipper.svg?style=flat)](https://github.com/tomcek42/Winclipper/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/tomcek42/Winclipper/total?style=flat&label=downloads)](https://github.com/tomcek42/Winclipper/releases)
+[![GitHub Release](https://img.shields.io/github/release/tomcek42/Winclipper.svg?style=flat&label=Release)](https://github.com/tomcek42/Winclipper/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/tomcek42/Winclipper/total?style=flat&label=Downloads)](https://github.com/tomcek42/Winclipper/releases)
 
 > **This is a security-hardened fork of [Carson-Shook/Winclipper](https://github.com/Carson-Shook/Winclipper).**
 > It fixes memory-safety bugs in clipboard and file parsing, encrypts saved clips with DPAPI, ignores content that
