@@ -3,6 +3,28 @@
 Changes in this fork compared to `Carson-Shook/Winclipper` 1.4.2. Details on each finding:
 `.gsd/SECURITY-FINDINGS.md`.
 
+## 1.6.3 (2026-10-29)
+
+### Fixes
+- The list of programs whose private content is recorded anyway never matched programs that put content on the
+  clipboard without an owner window, such as 1Password. Such content is now attributed to the program in the
+  foreground.
+
+### New
+- "Never record clips from these programs": a second program list in Settings > Clips. Clips from these programs
+  are never recorded, whether marked as private or not.
+- Option "Record clips from RDP sessions (only hidden from Windows history)", off by default. RDP marks every clip
+  as hidden from the Windows clipboard history; with the option on, this marker alone no longer makes a clip
+  private. Content marked with `ExcludeClipboardContentFromMonitorProcessing` (password managers) is still skipped.
+- Diagnostics: every clipboard update and the reason a clip was not recorded are written to the debug output
+  (view with DebugView, prefix `Winclipper clipboard:`). Clip contents are never logged.
+
+### Changes
+- "Check now" shows its result below the button instead of a message box. If an update is available, an
+  "Install update..." button opens the confirmation dialog directly.
+- Clearer labels for the program lists ("Always record" / "Never record"), more spacing on the Clips page and an
+  info tooltip for "Save clips to disk".
+
 ## 1.6.2 (2026-10-13)
 
 ### Fixes
