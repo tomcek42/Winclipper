@@ -807,7 +807,7 @@ static void ShowProgramNameRejected(HWND hWnd)
 
 LRESULT SettingsWindow::WmCommandBtnAddPrivate(HWND hWnd, WPARAM wParam, LPARAM lParam)
 {
-	const std::wstring name = PickProgramName(hWnd, L"Keep private content from this program");
+	const std::wstring name = PickProgramName(hWnd, L"Record private content from this program");
 	if (!name.empty())
 	{
 		if (!UserSettings::AddPrivateAllowed(name))
@@ -1043,7 +1043,7 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 
 	AddButton(left, top + 128, 110, L"&Clear clips", BTN_CLEAR_CLIPS, hInstance);
 
-	AddText(left, top + 166, 280, 32, L"Keep content marked as private (e.g. passwords) when it comes from these programs:",
+	AddText(left, top + 166, 280, 32, L"Record clips marked as private (e.g. passwords) anyway from these programs:",
 		LBL_PRIVATE_ALLOWED, hInstance);
 	privateAllowedList = CreateWindowExW(WS_EX_CLIENTEDGE, WC_LISTBOX, nullptr,
 		WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | LBS_NOTIFY | LBS_SORT | LBS_NOINTEGRALHEIGHT,
