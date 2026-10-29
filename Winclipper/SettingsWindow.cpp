@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "SettingsWindow.h"
+#include "ClipsManager.h"
 #include <commdlg.h>
 #pragma comment(lib, "Comdlg32.lib")
 #include <dwmapi.h>
@@ -94,6 +95,9 @@ LRESULT SettingsWindow::SettingsWndProc(HWND hWnd, UINT message, WPARAM wParam, 
 			break;
 		case BTN_CHECK_UPDATES:
 			lResult = pThis->WmCommandBtnCheckUpdates(hWnd, wParam, lParam);
+			break;
+		case BTN_INSTALL_UPDATE:
+			lResult = pThis->WmCommandBtnInstallUpdate(hWnd, wParam, lParam);
 			break;
 		case BTN_ADD_PRIVATE:
 			lResult = pThis->WmCommandBtnAddPrivate(hWnd, wParam, lParam);
@@ -639,6 +643,10 @@ void SettingsWindow::ShowPage(int page)
 	if (page == PAGE_UPDATES)
 	{
 		SetDlgItemTextW(windowHandle, LBL_INSTALLED_VERSION, (L"Installed version: " + Updater::CurrentVersion()).c_str());
+		if (!updateInstallable)
+		{
+			ShowWindow(GetDlgItem(windowHandle, BTN_INSTALL_UPDATE), SW_HIDE);
+		}
 	}
 }
 
@@ -873,9 +881,19 @@ LRESULT SettingsWindow::WmCommandBtnCheckUpdates(HWND hWnd, WPARAM wParam, LPARA
 	return 0;
 }
 
-void SettingsWindow::SetUpdateStatus(const std::wstring & text)
+// The button only opens the main window's confirmation dialog; it never installs directly.
+LRESULT SettingsWindow::WmCommandBtnInstallUpdate(HWND hWnd, WPARAM wParam, LPARAM lParam)
+{
+	SettingsWindow::SendNotifcation(IDM_INSTALL_UPDATE, nullptr);
+	return 0;
+}
+
+void SettingsWindow::SetUpdateStatus(const std::wstring & text, bool installable)
 {
 	SetDlgItemTextW(windowHandle, LBL_UPDATE_STATUS, text.c_str());
+	updateInstallable = installable;
+	const bool onUpdatesPage = SendMessageW(navigationList, LB_GETCURSEL, 0, 0) == PAGE_UPDATES;
+	ShowWindow(GetDlgItem(windowHandle, BTN_INSTALL_UPDATE), installable && onUpdatesPage ? SW_SHOW : SW_HIDE);
 }
 
 LRESULT SettingsWindow::WmNotify(HWND hWnd, WPARAM wParam, LPARAM lParam)
@@ -1095,6 +1113,7 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	AddText(left, top + 84, 280, 16, L"Installed version:", LBL_INSTALLED_VERSION, hInstance);
 	AddButton(left, top + 108, 110, L"Check &now", BTN_CHECK_UPDATES, hInstance);
 	AddText(left, top + 140, 280, 32, L"", LBL_UPDATE_STATUS, hInstance);
+	AddButton(left, top + 176, 110, L"&Install update...", BTN_INSTALL_UPDATE, hInstance);
 	AssignNewControlsToPage(PAGE_UPDATES);
 
 	// About

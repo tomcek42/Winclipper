@@ -359,12 +359,13 @@ LRESULT MainWindow::WmappUpdateState(HWND hWnd, WPARAM wParam, LPARAM lParam)
 			}
 			if (!version.empty())
 			{
-				settingsWindow.SetUpdateStatus(L"Winclipper " + version + L" is available. Click the tray icon to install it.");
+				settingsWindow.SetUpdateStatus(L"Winclipper " + version + L" is available.", true);
 			}
 		}
 		break;
 	case Updater::STATE_INSTALLING:
 		StartBlinking(L"Winclipper - installing update");
+		settingsWindow.SetUpdateStatus(L"Installing the update...");
 		break;
 	case Updater::STATE_UP_TO_DATE:
 		settingsWindow.SetUpdateStatus(L"Winclipper " + Updater::CurrentVersion() + L" is up to date.");
