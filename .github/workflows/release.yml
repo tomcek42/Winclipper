@@ -2,6 +2,10 @@ name: Release
 
 # Push a tag like v1.6.0 to build both EXEs and MSIs, sign the update manifest and publish the release.
 # workflow_dispatch builds without signing or publishing (artifacts only).
+#
+# The build job has a read-only token and no secrets. Only the release job sees the signing key and a token
+# that can write releases; it runs no build tools and no third-party code except minisign, which is pinned by
+# hash. Actions are pinned to commit SHAs, because a moved tag would run new code with these permissions.
 on:
   push:
     tags:
@@ -15,20 +19,23 @@ jobs:
   build:
     # windows-2025 ships Visual Studio 2026 (toolset v145) since June 2026.
     runs-on: windows-2025
-    permissions:
-      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     env:
       MSBUILD_ARGS: -p:Configuration=Release -m -nologo -v:minimal
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
-      - uses: microsoft/setup-msbuild@v2
+      - uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2.0.0
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: 10.0.x
 
       - name: Check the tag matches the version in the sources
+        id: version
         if: github.event_name == 'push'
         shell: pwsh
         run: |
@@ -40,7 +47,7 @@ jobs:
           }
           $rc = [IO.File]::ReadAllText('Winclipper/Winclipper.rc', [Text.Encoding]::Unicode)
           if (-not $rc.Contains("`"FileVersion`", `"$full`"")) { throw "Winclipper.rc is not at $full" }
-          "VERSION=$full" >> $env:GITHUB_ENV
+          "version=$full" >> $env:GITHUB_OUTPUT
 
       - name: Build EXEs
         run: |
@@ -54,19 +61,54 @@ jobs:
           New-Item -ItemType Directory -Force dist | Out-Null
           Copy-Item Setup-x64/bin/x64/Release/WinclipperSetup-x64.msi, Setup-x86/bin/x86/Release/WinclipperSetup-x86.msi dist/
 
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: winclipper
+          path: dist/*.msi
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: windows-2025
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+      # minisign 0.12 (win64). The hash was checked against the release signature made with the minisign
+      # author's key RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3. Update both lines together.
+      MINISIGN_URL: https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-win64.zip
+      MINISIGN_SHA256: 37b600344e20c19314b2e82813db2bfdcc408b77b876f7727889dbd46d539479
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: winclipper
+          path: dist
+
+      - name: Install minisign
+        shell: pwsh
+        run: |
+          $zip = "$env:RUNNER_TEMP/minisign.zip"
+          Invoke-WebRequest $env:MINISIGN_URL -OutFile $zip
+          $hash = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
+          if ($hash -ne $env:MINISIGN_SHA256) { throw "minisign download has hash $hash, expected $env:MINISIGN_SHA256" }
+          Expand-Archive $zip "$env:RUNNER_TEMP/minisign"
+          $exe = Get-ChildItem -Recurse "$env:RUNNER_TEMP/minisign" -Filter minisign.exe | Where-Object FullName -match 'x86_64' | Select-Object -First 1
+          if (-not $exe) { throw 'minisign.exe not found in the archive.' }
+          $exe.DirectoryName >> $env:GITHUB_PATH
+
       - name: Sign the update manifest
-        if: github.event_name == 'push'
         shell: pwsh
         env:
           MINISIGN_KEY: ${{ secrets.WINCLIPPER_UPDATE_KEY }}
           MINISIGN_PASSWORD: ${{ secrets.WINCLIPPER_UPDATE_KEY_PASSWORD }}
         run: |
+          if (-not $env:VERSION) { throw 'Version from the build job is missing.' }
           if (-not $env:MINISIGN_KEY -or -not $env:MINISIGN_PASSWORD) { throw 'Signing secrets are missing.' }
-          $url = 'https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-win64.zip'
-          Invoke-WebRequest $url -OutFile "$env:RUNNER_TEMP/minisign.zip"
-          Expand-Archive "$env:RUNNER_TEMP/minisign.zip" "$env:RUNNER_TEMP/minisign"
-          $exe = Get-ChildItem -Recurse "$env:RUNNER_TEMP/minisign" -Filter minisign.exe | Where-Object FullName -match 'x86_64' | Select-Object -First 1
-          $env:PATH = "$($exe.DirectoryName);$env:PATH"
           $key = Join-Path $env:RUNNER_TEMP 'winclipper-update.key'
           [IO.File]::WriteAllText($key, $env:MINISIGN_KEY.Trim() + "`n")
           try {
@@ -75,13 +117,7 @@ jobs:
             Remove-Item $key -Force
           }
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: winclipper
-          path: dist/*
-
       - name: Publish the release
-        if: github.event_name == 'push'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
