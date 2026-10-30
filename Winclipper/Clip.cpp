@@ -102,6 +102,12 @@ void Clip::Deserialize(std::string serializationData)
 							break;
 						case CF_DIB:
 							AddFormat(cf);
+							// The GUID names a file in BitmapCache\; a crafted value must not
+							// reach a file operation (the destructor deletes it for corrupt clips).
+							if (!OnDemandBitmapManager::IsValidGuid(units.at(1)))
+							{
+								throw std::exception("Invalid bitmap identifier.");
+							}
 							bitmapGuid = units.at(1);
 							if (!OnDemandBitmapManager::Exists(bitmapGuid))
 							{

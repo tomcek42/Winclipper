@@ -12,14 +12,51 @@ std::wstring OnDemandBitmapManager::GetCacheDir()
 	return cacheDir;
 }
 
+// True if guid has the form CreateGuidString produces (8-4-4-4-12 hex digits).
+// The GUID of a clip comes from clips.dat, which is untrusted; anything else
+// could carry path separators or ".." and point outside BitmapCache\.
+bool OnDemandBitmapManager::IsValidGuid(const std::string & guid) noexcept
+{
+	if (guid.size() != 36)
+	{
+		return false;
+	}
+	for (size_t i = 0; i < guid.size(); i++)
+	{
+		const char c = guid[i];
+		if (i == 8 || i == 13 || i == 18 || i == 23)
+		{
+			if (c != '-')
+			{
+				return false;
+			}
+		}
+		else if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f')))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+// Path of the cache file for guid. Throws for anything that is not a GUID,
+// so no file outside BitmapCache\ is ever read, rewritten or deleted.
+std::wstring OnDemandBitmapManager::CachePath(const std::string & guid)
+{
+	if (!IsValidGuid(guid))
+	{
+		throw std::exception("Invalid bitmap identifier.");
+	}
+	return File::JoinPath(GetCacheDir(), std::wstring(guid.begin(), guid.end()));
+}
+
 std::string OnDemandBitmapManager::Add(std::shared_ptr<Bitmap> bitmap)
 {
 	std::string guid(CreateGuidString());
 
 	if (saveToDisk)
 	{
-		std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-		auto path = File::JoinPath(GetCacheDir(), converter.from_bytes(guid));
+		auto path = CachePath(guid);
 
 		File::WriteProtected(path, bitmap->Serialize());
 	}
@@ -46,8 +83,7 @@ std::weak_ptr<Bitmap> OnDemandBitmapManager::Get(std::string guid)
 		}
 	}
 
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-	auto path = File::JoinPath(GetCacheDir(), converter.from_bytes(guid));
+	auto path = CachePath(guid);
 
 	// Load outside the lock so file I/O does not block other cache users.
 	std::shared_ptr<Bitmap> bitmap = std::make_shared<Bitmap>();
@@ -70,8 +106,7 @@ std::weak_ptr<Bitmap> OnDemandBitmapManager::Get(std::string guid)
 
 void OnDemandBitmapManager::Remove(std::string guid)
 {
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-	auto path = File::JoinPath(GetCacheDir(), converter.from_bytes(guid));
+	auto path = CachePath(guid);
 
 	// The thread must own its copy of the path; a pointer into the
 	// local string would dangle once this function returns.
@@ -92,8 +127,11 @@ void OnDemandBitmapManager::Remove(std::string guid)
 
 bool OnDemandBitmapManager::Exists(std::string guid)
 {
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-	auto path = File::JoinPath(GetCacheDir(), converter.from_bytes(guid));
+	if (!IsValidGuid(guid))
+	{
+		return false;
+	}
+	auto path = CachePath(guid);
 
 	return File::Exists(path.c_str());
 }
@@ -133,8 +171,7 @@ void OnDemandBitmapManager::SetSaveToDisk(bool newSaveToDisk)
 			}
 			for (const auto &pair : snapshot)
 			{
-				std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-				auto path = File::JoinPath(GetCacheDir(), converter.from_bytes(pair.first));
+				auto path = CachePath(pair.first);
 				File::WriteProtected(path, pair.second->Serialize());
 				UpdateUsage(pair.first);
 			}
@@ -278,8 +315,7 @@ HBITMAP OnDemandBitmapManager::CreateThumbnail(std::shared_ptr<Bitmap> bitmap)
 HBITMAP OnDemandBitmapManager::GetThumbnail(std::string guid)
 {
 	HBITMAP retVal = nullptr;
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-	auto path = File::JoinPath(GetCacheDir(), converter.from_bytes(guid));
+	auto path = CachePath(guid);
 
 	// Older versions saved thumbnails as plaintext BMP files.
 	path += L"-thumb";
@@ -299,8 +335,7 @@ HBITMAP OnDemandBitmapManager::GetThumbnail(std::string guid)
 
 void OnDemandBitmapManager::RemoveThumbnail(std::string guid, bool async)
 {
-	std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-	auto path = File::JoinPath(GetCacheDir(), converter.from_bytes(guid));
+	auto path = CachePath(guid);
 	
 	if (async)
 	{

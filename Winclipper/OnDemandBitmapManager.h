@@ -16,6 +16,7 @@ public:
 	static std::weak_ptr<Bitmap>	Get(std::string guid);
 	static void						Remove(std::string guid);
 	static bool						Exists(std::string guid);
+	static bool						IsValidGuid(const std::string & guid) noexcept;
 
 	static unsigned long long		MaxBytes() noexcept;
 	static void						SetMaxBytes(unsigned long long newMaxBytes);
@@ -37,6 +38,7 @@ private:
 	OnDemandBitmapManager() noexcept {};
 	~OnDemandBitmapManager() {};
 
+	static std::wstring				CachePath(const std::string & guid);
 	static void						RunCleanupAsync();
 	static void						RunCleanupInternal();
 
