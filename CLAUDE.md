@@ -30,7 +30,7 @@ both `Setup-*/Product.wxs`. Bump them together.
 The original author's auto-updater (SSUP) was removed on purpose (F8): it downloaded MSIs from the author's domain
 without signature checks. Do not add it back. The fork's own updater (`Updater.cpp`, `docs/UPDATER.md`) only installs
 MSIs pinned by a manifest signed with the release key; never relax the signature, downgrade or URL-prefix checks.
-Releases are built and signed by `.github/workflows/release.yml` on a `v*` tag (secrets `WINCLIPPER_UPDATE_KEY`, `WINCLIPPER_UPDATE_KEY_PASSWORD`); `tools/sign-update.ps1` is the manual fallback.
+Releases are built and signed by `.github/workflows/release.yml` on a `v*` tag; the `release` job runs in the `release` environment (required reviewer, tags `v*` only), which holds the secrets `WINCLIPPER_UPDATE_KEY` and `WINCLIPPER_UPDATE_KEY_PASSWORD`. Keep them environment secrets, not repository secrets, and do not remove `environment: release`. `tools/sign-update.ps1` is the manual fallback.
 Signatures are minisign/Ed25519 (same scheme as the Tauri updater), verified with the vendored, unmodified
 Monocypher in `Winclipper/monocypher/` (C files, precompiled headers off). The secret key is a
 password-protected minisign file, deliberately not DPAPI, so it survives a Windows profile change.

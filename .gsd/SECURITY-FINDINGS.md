@@ -213,8 +213,12 @@ minisign binary or action could have taken the key. Fix: the build job has a rea
 separate release job signs and publishes without running build tools; minisign 0.12 is pinned by SHA-256 (checked
 against the release signature of the minisign author's key `RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3`);
 all actions are pinned to commit SHAs.
-Remaining risk: the key lives in GitHub secrets, so whoever controls the GitHub account can sign and publish. The
-signature protects against compromised release hosting, not against a compromised account. Signing offline or a
-protected environment with required reviewers would close that gap. The MSIs are not Authenticode-signed, so the
+Follow-up: the release job runs in the `release` environment, which holds the signing secrets, accepts only `v*`
+tags and requires the owner's approval. The key reaches a runner only after approval, so a compromised build step
+cannot sign or publish on its own.
+Remaining risk: whoever controls the owner's GitHub account can still approve, sign and publish; the signature
+protects against compromised release hosting, not against a compromised account. Only offline signing would close
+that gap. The approval does not prove the MSIs are clean, since the signing job signs whatever the build produced
+(the builds are not reproducible). The MSIs are not Authenticode-signed, so the
 UAC prompt shows an unknown publisher.
 

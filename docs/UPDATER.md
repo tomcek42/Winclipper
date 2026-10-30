@@ -50,11 +50,34 @@ Releases are built and signed by GitHub Actions (`.github/workflows/release.yml`
    sources and builds both EXEs and MSIs in the `build` job (read-only token, no secrets). The `release` job then
    signs the manifest and publishes the release with all four files; it runs no build tools and is the only job
    that sees the signing key. Its release notes are the matching `CHANGELOG.md` section plus the MSI hashes.
-3. Running the workflow manually (`workflow_dispatch`) only builds and uploads the MSIs as artifacts.
+3. The run pauses before the `release` job ("Review deployments"). Check the build log and the `winclipper`
+   artifact (the MSIs), then approve. Nothing is signed or published before that; rejecting the deployment or
+   letting it time out leaves no release behind.
+4. Running the workflow manually (`workflow_dispatch`) only builds and uploads the MSIs as artifacts.
 
-The workflow needs two repository secrets: `WINCLIPPER_UPDATE_KEY` (the full content of the minisign `.key`
-file) and `WINCLIPPER_UPDATE_KEY_PASSWORD`. A manual fallback still works locally:
-`pwsh tools/sign-update.ps1 -Version 1.6.0.0` (needs `minisign`, asks for the password).
+A manual fallback still works locally: `pwsh tools/sign-update.ps1 -Version 1.6.0.0` (needs `minisign`, asks
+for the password).
+
+### The `release` environment
+
+The `release` job runs in a GitHub environment named `release`. It must exist before the next tag is pushed;
+without it GitHub creates an unprotected one on the first run. Set it up once under the repository's
+Settings > Environments:
+
+1. New environment `release`.
+2. **Required reviewers:** add the project owner. Leave "Prevent self-review" off, since the owner both pushes the
+   tag and approves; with it on, nobody could approve.
+3. **Deployment branches and tags:** "Selected branches and tags", add the tag pattern `v*` (as a tag rule, not a
+   branch rule). Other refs then cannot use the environment.
+4. **Environment secrets:** `WINCLIPPER_UPDATE_KEY` (the full content of the minisign `.key` file) and
+   `WINCLIPPER_UPDATE_KEY_PASSWORD`.
+5. Delete the repository secrets of the same names under Settings > Secrets and variables > Actions, so that no
+   other job or workflow can read them.
+
+What this protects: a compromised build step, action or dependency cannot sign or publish on its own, and the key
+reaches a runner only after approval. What it does not protect: an attacker who controls the owner's GitHub
+account can approve as well (use a passkey or security key for 2FA), and the approval does not prove the MSIs are
+clean; it only gives a moment to notice something unusual before they are signed.
 
 The workflow pins every action to a commit SHA and minisign to a SHA-256 (`MINISIGN_SHA256`). To update minisign,
 download the new release, verify its `.minisig` with the minisign author's public key

@@ -6,6 +6,10 @@ name: Release
 # The build job has a read-only token and no secrets. Only the release job sees the signing key and a token
 # that can write releases; it runs no build tools and no third-party code except minisign, which is pinned by
 # hash. Actions are pinned to commit SHAs, because a moved tag would run new code with these permissions.
+#
+# The release job runs in the "release" environment, which holds the signing secrets and requires a reviewer's
+# approval (set up in the repository settings, see docs/UPDATER.md). The run pauses after the build; the key is
+# handed to the job only once the release is approved.
 on:
   push:
     tags:
@@ -71,6 +75,7 @@ jobs:
     needs: build
     if: github.event_name == 'push'
     runs-on: windows-2025
+    environment: release
     permissions:
       contents: write
     env:

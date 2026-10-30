@@ -8,7 +8,8 @@ Changes in this fork compared to `Carson-Shook/Winclipper` 1.4.2. Details on eac
 ### Security
 - **F15** The image identifier of a saved clip is checked before it is used as a file name. A modified clips
   file could otherwise make Winclipper delete or overwrite a file outside its image cache.
-- **F16** Releases are signed in a separate CI job that runs no build tools; minisign and all actions are pinned.
+- **F16** Releases are signed in a separate CI job that runs no build tools and needs the owner's approval;
+  minisign and all actions are pinned.
 - The list of programs whose private content is recorded anyway ("Always record") is empty by default.
   1Password is no longer on it, so passwords it marks as private are not recorded unless you add it yourself.
   Existing settings keep their list; remove 1Password in Settings > Clips if you do not want its passwords recorded.
