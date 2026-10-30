@@ -20,6 +20,8 @@ Released as 1.5.0.
 | F12 Stack overflow when reading registry values | fixed | `08187b1` |
 | F13 Unquoted autostart path | fixed | `ffe49b1` |
 | F14 Clipboard exclusion markers ignored | fixed | `0370fc7` |
+| F15 Path traversal via the bitmap GUID in `clips.dat` | fixed | `d7a9339` |
+| F16 Release signing shared a job with the build, minisign unpinned | fixed | `587868b` |
 
 ## Build setup
 
@@ -188,3 +190,31 @@ fail, it stays set and the next real copy is swallowed (functional, minor).
 - Installer: upgrade from an upstream installation tested by the project owner — only one Winclipper installation
   remains. The WiX 7 MSIs were installed over the existing version; "Launch Winclipper" works. MSI tables checked:
   own `UpgradeCode`, upstream code (x64 `34e3392e…`, x86 `a332e06b…`) is removed, Run value quoted.
+
+## Findings after 1.6.3 (2026-10-30)
+
+### F15 — Path traversal via the bitmap GUID in `clips.dat` (`Winclipper/Clip.cpp`, `OnDemandBitmapManager.cpp`) — medium
+The GUID of an image clip was read from `clips.dat` and joined to the `BitmapCache\` path without a check. A value
+like `..\..\Documents\x.docx` pointed outside the cache: if the rest of the record was invalid, the corrupt clip
+was marked for deletion and its destructor deleted that file; loading a plaintext BMP there rewrote it encrypted.
+Fix: every cache path goes through `OnDemandBitmapManager::CachePath`, which accepts only the 8-4-4-4-12 hex format
+`CreateGuidString` produces and throws otherwise; `Clip::Deserialize` rejects such clips before storing the GUID.
+Within the threat model (same user) the impact is limited, but it broke the rule that AppData files are untrusted.
+
+Not changed on purpose: `ReadProtected` still accepts files without the `WCDPAPI1` marker as plaintext from older
+versions. Rejecting them would not help, since the DPAPI entropy is public and any process of the user can write
+valid encrypted files as well. DPAPI gives confidentiality against other users and offline access, not integrity
+against the same user.
+
+### F16 — Release signing shared a job with the build (`.github/workflows/release.yml`) — medium
+The signing key, its password and a token with `contents: write` were available in the job that also ran msbuild,
+NuGet restore and tag-pinned actions, and minisign was downloaded and run without a hash check. A tampered
+minisign binary or action could have taken the key. Fix: the build job has a read-only token and no secrets; a
+separate release job signs and publishes without running build tools; minisign 0.12 is pinned by SHA-256 (checked
+against the release signature of the minisign author's key `RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3`);
+all actions are pinned to commit SHAs.
+Remaining risk: the key lives in GitHub secrets, so whoever controls the GitHub account can sign and publish. The
+signature protects against compromised release hosting, not against a compromised account. Signing offline or a
+protected environment with required reviewers would close that gap. The MSIs are not Authenticode-signed, so the
+UAC prompt shows an unknown publisher.
+

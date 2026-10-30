@@ -47,13 +47,19 @@ Releases are built and signed by GitHub Actions (`.github/workflows/release.yml`
 
 1. Bump the version in the three places listed in `CLAUDE.md` and add a `## <version>` section to `CHANGELOG.md`.
 2. Commit, then push a tag `v1.6.0` (a trailing `.0` is dropped). The workflow checks that the tag matches the
-   sources, builds both EXEs and MSIs, signs the manifest and publishes the release with all four files.
-   Its release notes are the matching `CHANGELOG.md` section plus the MSI hashes.
+   sources and builds both EXEs and MSIs in the `build` job (read-only token, no secrets). The `release` job then
+   signs the manifest and publishes the release with all four files; it runs no build tools and is the only job
+   that sees the signing key. Its release notes are the matching `CHANGELOG.md` section plus the MSI hashes.
 3. Running the workflow manually (`workflow_dispatch`) only builds and uploads the MSIs as artifacts.
 
 The workflow needs two repository secrets: `WINCLIPPER_UPDATE_KEY` (the full content of the minisign `.key`
 file) and `WINCLIPPER_UPDATE_KEY_PASSWORD`. A manual fallback still works locally:
 `pwsh tools/sign-update.ps1 -Version 1.6.0.0` (needs `minisign`, asks for the password).
+
+The workflow pins every action to a commit SHA and minisign to a SHA-256 (`MINISIGN_SHA256`). To update minisign,
+download the new release, verify its `.minisig` with the minisign author's public key
+`RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3`, and change `MINISIGN_URL` and `MINISIGN_SHA256`
+together.
 
 ## The signing key
 
