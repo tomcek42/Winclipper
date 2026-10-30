@@ -3,6 +3,13 @@
 Changes in this fork compared to `Carson-Shook/Winclipper` 1.4.2. Details on each finding:
 `.gsd/SECURITY-FINDINGS.md`.
 
+## Unreleased
+
+### Security
+- The list of programs whose private content is recorded anyway ("Always record") is empty by default.
+  1Password is no longer on it, so passwords it marks as private are not recorded unless you add it yourself.
+  Existing settings keep their list; remove 1Password in Settings > Clips if you do not want its passwords recorded.
+
 ## 1.6.3 (2026-10-29)
 
 ### Fixes

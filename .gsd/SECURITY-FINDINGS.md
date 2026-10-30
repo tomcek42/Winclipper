@@ -171,6 +171,10 @@ name is treated the same; this is accepted because any process of the user can r
 clips are stored DPAPI-encrypted like all others. Names from `settings.dat` are validated (printable ASCII subset,
 no path) and capped at 50.
 
+The `1Password.exe` default was removed later: with it, the passwords F14 is meant to skip were recorded by
+default. New installations start with an empty list. Existing `settings.dat` files keep their list, because an
+entry the user added cannot be told apart from the old default.
+
 Clipboard ownership otherwise without security findings: `ClipLock` (non-atomic `bool`, UI thread only) suppresses
 the `WM_CLIPBOARDUPDATE` after Winclipper sets the clipboard itself. If all attempts in `SetClipboardToClipAtIndex`
 fail, it stays set and the next real copy is swallowed (functional, minor).

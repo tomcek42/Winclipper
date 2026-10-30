@@ -63,8 +63,8 @@ Persist new clip content only through these, never with `File::Write`. Thumbnail
 to disk (F2).
 
 Clipboard content marked as private (F14) is skipped unless the owning program is on the user's allow list
-(`UserSettings::IsPrivateAllowed`). Do not add programs to it implicitly; the `1Password.exe` default was requested
-by the project owner. Updates are never installed without the user's confirmation in the update dialog.
+(`UserSettings::IsPrivateAllowed`). The list is empty by default; do not add programs to it implicitly.
+Updates are never installed without the user's confirmation in the update dialog.
 
 The installer has its own `UpgradeCode` and removes upstream installations via `<Upgrade>` on the old codes.
 Do not bring back the upstream code.

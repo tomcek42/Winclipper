@@ -95,8 +95,9 @@ void UserSettings::InitializeSettings()
 	pasteOnClick = PASTE_ON_CLICK_DEF;
 	notifyUpdates = NOTIFY_UPDATES_DEF;
 	historyMarkerIgnored = HISTORY_MARKER_IGNORED_DEF;
-	// Requested by the project owner; removable in Settings.
-	privateAllowed = { L"1Password.exe" };
+	// Empty by default: private content is only recorded from programs the
+	// user adds in Settings.
+	privateAllowed.clear();
 	excludedPrograms.clear();
 	maxCacheMegabytes = MAX_CACHE_MBYTES_DEF;
 
