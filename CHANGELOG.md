@@ -3,7 +3,7 @@
 Changes in this fork compared to `Carson-Shook/Winclipper` 1.4.2. Details on each finding:
 `docs/SECURITY-FINDINGS.md`.
 
-## Unreleased
+## 1.6.5 (2026-11-01)
 
 ### Changes
 - Settings > Updates shows "See what's new", "Install update" and "Later" directly when an update is found.
