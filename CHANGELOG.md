@@ -3,7 +3,7 @@
 Changes in this fork compared to `Carson-Shook/Winclipper` 1.4.2. Details on each finding:
 `docs/SECURITY-FINDINGS.md`.
 
-## Unreleased
+## 1.6.4 (2026-11-01)
 
 ### Security
 - **F15** The image identifier of a saved clip is checked before it is used as a file name. A modified clips
