@@ -6,7 +6,7 @@
 > **This is a security-hardened fork of [Carson-Shook/Winclipper](https://github.com/Carson-Shook/Winclipper).**
 > It fixes memory-safety bugs in clipboard and file parsing, encrypts saved clips with DPAPI, ignores content that
 > password managers mark as private, and removes the original auto-updater, which downloaded unsigned installers.
-> See [CHANGELOG.md](CHANGELOG.md) and [the security findings](.gsd/SECURITY-FINDINGS.md). Installers are on the
+> See [CHANGELOG.md](CHANGELOG.md) and [the security findings](docs/SECURITY-FINDINGS.md). Installers are on the
 > [Releases](https://github.com/tomcek42/Winclipper/releases) page.
 
 Winclipper is a lightweight Win32 application that saves everything that you copy so that you can paste it later when you really need it. It's designed with Unicode in mind so that you can copy any character from any language or a string of emojis and know that it will paste correctly.

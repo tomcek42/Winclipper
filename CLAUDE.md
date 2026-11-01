@@ -1,7 +1,7 @@
 # CLAUDE.md — Winclipper
 
 Fork of `Carson-Shook/Winclipper` (Win32 clipboard manager, C++14, MSVC).
-Goal of this fork: security review and hardening. Findings and backlog: `.gsd/SECURITY-FINDINGS.md`.
+Goal of this fork: security review and hardening. Findings and backlog: `docs/SECURITY-FINDINGS.md`.
 
 ## Building
 

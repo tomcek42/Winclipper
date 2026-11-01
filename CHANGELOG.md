@@ -1,7 +1,7 @@
 # Changelog
 
 Changes in this fork compared to `Carson-Shook/Winclipper` 1.4.2. Details on each finding:
-`.gsd/SECURITY-FINDINGS.md`.
+`docs/SECURITY-FINDINGS.md`.
 
 ## Unreleased
 
