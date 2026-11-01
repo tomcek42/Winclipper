@@ -20,8 +20,8 @@ Released as 1.5.0.
 | F12 Stack overflow when reading registry values | fixed | `08187b1` |
 | F13 Unquoted autostart path | fixed | `ffe49b1` |
 | F14 Clipboard exclusion markers ignored | fixed | `0370fc7` |
-| F15 Path traversal via the bitmap GUID in `clips.dat` | fixed | `d7a9339` |
-| F16 Release signing shared a job with the build, minisign unpinned | fixed | `587868b` |
+| F15 Path traversal via the bitmap GUID in `clips.dat` | fixed | `13049c2` |
+| F16 Release signing shared a job with the build, minisign unpinned | fixed | `d04b8fa` |
 
 ## Build setup
 
