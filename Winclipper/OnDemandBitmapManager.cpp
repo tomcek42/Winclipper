@@ -87,13 +87,7 @@ std::weak_ptr<Bitmap> OnDemandBitmapManager::Get(std::string guid)
 
 	// Load outside the lock so file I/O does not block other cache users.
 	std::shared_ptr<Bitmap> bitmap = std::make_shared<Bitmap>();
-	bool wasPlaintext = false;
-	bitmap->Deserialize(File::ReadProtected(path, wasPlaintext));
-	if (wasPlaintext && saveToDisk)
-	{
-		// Cache file from an older version: replace it with an encrypted one.
-		File::WriteProtected(path, bitmap->Serialize());
-	}
+	bitmap->Deserialize(File::ReadProtected(path));
 
 	std::lock_guard<std::mutex> lock(cacheMutex);
 	auto inserted = bitmapCache.emplace(guid, bitmap);
@@ -184,11 +178,11 @@ void OnDemandBitmapManager::DeleteAllFromDisk()
 	File::DeleteDir(GetCacheDir());
 }
 
-// Older versions stored every bitmap and its thumbnail as plaintext BMP.
-// Get only migrates a bitmap when it is loaded, which may never happen,
-// so encrypt all remaining plaintext files and drop the thumbnails once
-// at startup. The bytes are rewritten as-is and not parsed here.
-void OnDemandBitmapManager::ProtectDiskCache()
+// Versions before 1.5.0 stored every bitmap and its thumbnail as plaintext
+// BMP. Such files are no longer read, so delete them at startup instead of
+// leaving unencrypted copies of clip images on disk; files that cannot be
+// decrypted are useless as well. The data is not parsed here.
+void OnDemandBitmapManager::RemoveUnprotectedFiles()
 {
 	const std::wstring dir = GetCacheDir();
 	WIN32_FIND_DATAW findData;
@@ -218,16 +212,11 @@ void OnDemandBitmapManager::ProtectDiskCache()
 
 		try
 		{
-			bool wasPlaintext = false;
-			std::string data = File::ReadProtected(path, wasPlaintext);
-			if (wasPlaintext)
-			{
-				File::WriteProtected(path, data);
-			}
+			File::ReadProtected(path);
 		}
 		catch (const std::exception&)
 		{
-			// Undecryptable files are rejected when the clip loads them.
+			File::Delete(path.c_str());
 		}
 	} while (FindNextFileW(hFind, &findData));
 

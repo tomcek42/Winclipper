@@ -13,6 +13,8 @@ Changes in this fork compared to `Carson-Shook/Winclipper` 1.4.2. Details on eac
 - The list of programs whose private content is recorded anyway ("Always record") is empty by default.
   1Password is no longer on it, so passwords it marks as private are not recorded unless you add it yourself.
   Existing settings keep their list; remove 1Password in Settings > Clips if you do not want its passwords recorded.
+- Unencrypted clip files from versions before 1.5.0 are no longer read. Leftover unencrypted images in the cache
+  are deleted at startup. Updating directly from 1.4.2 or older therefore discards the saved clip history.
 
 ## 1.6.3 (2026-10-29)
 

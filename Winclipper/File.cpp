@@ -4,8 +4,7 @@
 #pragma comment(lib, "Crypt32.lib")
 
 // Files written by WriteProtected start with this marker, followed by a
-// DPAPI blob bound to the current user. Files without it are from versions
-// that stored clips in plaintext.
+// DPAPI blob bound to the current user. Files without it are rejected.
 static const char PROTECTED_MAGIC[] = "WCDPAPI1";
 static const size_t PROTECTED_MAGIC_LEN = sizeof(PROTECTED_MAGIC) - 1;
 
@@ -181,19 +180,21 @@ void File::WriteProtected(std::wstring filename, const std::string & data)
 }
 
 // Reads a file written by WriteProtected and returns the decrypted data.
-// A file without the marker is returned as-is with wasPlaintext set, so
-// the caller can rewrite it encrypted. Throws if decryption fails, e.g.
+// An empty file yields empty data. Throws for a file without the marker
+// (plaintext from versions before 1.5.0) and if decryption fails, e.g.
 // because the file was tampered with or belongs to another user.
-std::string File::ReadProtected(std::wstring filename, bool & wasPlaintext)
+std::string File::ReadProtected(std::wstring filename)
 {
 	std::string file = Read(filename);
 
-	if (file.compare(0, PROTECTED_MAGIC_LEN, PROTECTED_MAGIC, PROTECTED_MAGIC_LEN) != 0)
+	if (file.empty())
 	{
-		wasPlaintext = !file.empty();
 		return file;
 	}
-	wasPlaintext = false;
+	if (file.compare(0, PROTECTED_MAGIC_LEN, PROTECTED_MAGIC, PROTECTED_MAGIC_LEN) != 0)
+	{
+		throw std::exception("Clip data is not encrypted.");
+	}
 
 	const size_t blobSize = file.size() - PROTECTED_MAGIC_LEN;
 	if (blobSize == 0 || blobSize > MAXDWORD)

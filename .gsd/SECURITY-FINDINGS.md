@@ -201,10 +201,12 @@ Fix: every cache path goes through `OnDemandBitmapManager::CachePath`, which acc
 `CreateGuidString` produces and throws otherwise; `Clip::Deserialize` rejects such clips before storing the GUID.
 Within the threat model (same user) the impact is limited, but it broke the rule that AppData files are untrusted.
 
-Not changed on purpose: `ReadProtected` still accepts files without the `WCDPAPI1` marker as plaintext from older
-versions. Rejecting them would not help, since the DPAPI entropy is public and any process of the user can write
-valid encrypted files as well. DPAPI gives confidentiality against other users and offline access, not integrity
-against the same user.
+Plaintext migration removed later: `ReadProtected` now rejects files without the `WCDPAPI1` marker, and at startup
+`OnDemandBitmapManager::RemoveUnprotectedFiles` (formerly `ProtectDiskCache`) deletes cache files that are not
+encrypted or cannot be decrypted; a plaintext `clips.dat` is reported and overwritten by the next save. Clips from
+versions before 1.5.0 are therefore lost. This is cleanup, not an integrity measure: the DPAPI entropy is public and
+any process of the user can write valid encrypted files, so DPAPI gives confidentiality against other users and
+offline access, not integrity against the same user.
 
 ### F16 — Release signing shared a job with the build (`.github/workflows/release.yml`) — medium
 The signing key, its password and a token with `contents: write` were available in the job that also ran msbuild,

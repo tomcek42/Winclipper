@@ -22,7 +22,7 @@ public:
 	static void						SetMaxBytes(unsigned long long newMaxBytes);
 	static void						SetSaveToDisk(bool newSaveToDisk);
 	static void						DeleteAllFromDisk();
-	static void						ProtectDiskCache();
+	static void						RemoveUnprotectedFiles();
 
 	static HBITMAP					CreateThumbnail(std::shared_ptr<Bitmap> bitmap);
 	static HBITMAP					GetThumbnail(std::string guid);

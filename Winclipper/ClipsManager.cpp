@@ -58,10 +58,9 @@ void ClipsManager::ReadClips()
     {
 		try
 		{
-			// A plaintext file from an older version is accepted once; the
-			// constructor saves right after reading, which encrypts it.
-			bool wasPlaintext = false;
-			clips.Deserialize(File::ReadProtected(fullClipsPath, wasPlaintext));
+			// A plaintext file from a version before 1.5.0 is rejected; the
+			// constructor saves right after reading, which overwrites it.
+			clips.Deserialize(File::ReadProtected(fullClipsPath));
 		}
 		catch (const std::exception& e)
 		{
@@ -141,7 +140,7 @@ ClipsManager::ClipsManager()
 
 	windows10ReleaseId = RegistryUtilities::GetWindows10ReleaseId();
 
-	OnDemandBitmapManager::ProtectDiskCache();
+	OnDemandBitmapManager::RemoveUnprotectedFiles();
 	ReadClips();
     UpdateMaxClips();
 	UpdateSavedImages();
