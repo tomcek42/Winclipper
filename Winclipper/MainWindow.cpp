@@ -418,7 +418,7 @@ void MainWindow::PromptInstallUpdate()
 	TASKDIALOGCONFIG config = { sizeof(config) };
 	config.hwndParent = windowHandle;
 	config.hInstance = hInst;
-	config.dwFlags = TDF_ENABLE_HYPERLINKS | TDF_ALLOW_DIALOG_CANCELLATION | TDF_POSITION_RELATIVE_TO_WINDOW;
+	config.dwFlags = TDF_ENABLE_HYPERLINKS | TDF_ALLOW_DIALOG_CANCELLATION;
 	config.pszWindowTitle = L"Winclipper update";
 	config.pszMainIcon = TD_INFORMATION_ICON;
 	config.pszMainInstruction = instruction.c_str();
