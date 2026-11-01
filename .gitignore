@@ -263,3 +263,9 @@ ModelManifest.xml
 
 # Locally built installers
 dist/
+
+# Local planning and agent files
+.gsd/
+phases/
+.claude/
+Security/
