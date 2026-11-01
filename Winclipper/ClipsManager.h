@@ -16,6 +16,8 @@
 #define EXIT_SELECT         2002    // close the application
 #define UPDATE_SELECT       2003    // install the update the updater found
 #define IDM_INSTALL_UPDATE  32790   // WM_COMMAND for UPDATE_SELECT (not a resource)
+#define IDM_INSTALL_UPDATE_NOW 32791 // Settings "Install update": already confirmed, no dialog
+#define IDM_UPDATE_LATER    32792   // Settings "Later"
 #define CLIPS_WRITE_DELAY   2000    
 
                                     // ERROR is returned in any other situation

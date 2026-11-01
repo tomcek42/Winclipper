@@ -99,6 +99,9 @@ LRESULT SettingsWindow::SettingsWndProc(HWND hWnd, UINT message, WPARAM wParam, 
 		case BTN_INSTALL_UPDATE:
 			lResult = pThis->WmCommandBtnInstallUpdate(hWnd, wParam, lParam);
 			break;
+		case BTN_UPDATE_LATER:
+			lResult = pThis->WmCommandBtnUpdateLater(hWnd, wParam, lParam);
+			break;
 		case BTN_ADD_PRIVATE:
 			lResult = pThis->WmCommandBtnAddPrivate(hWnd, wParam, lParam);
 			break;
@@ -647,10 +650,7 @@ void SettingsWindow::ShowPage(int page)
 	if (page == PAGE_UPDATES)
 	{
 		SetDlgItemTextW(windowHandle, LBL_INSTALLED_VERSION, (L"Installed version: " + Updater::CurrentVersion()).c_str());
-		if (!updateInstallable)
-		{
-			ShowWindow(GetDlgItem(windowHandle, BTN_INSTALL_UPDATE), SW_HIDE);
-		}
+		ShowUpdateControls(updateInstallable);
 	}
 }
 
@@ -914,25 +914,45 @@ LRESULT SettingsWindow::WmCommandBtnCheckUpdates(HWND hWnd, WPARAM wParam, LPARA
 	return 0;
 }
 
-// The button only opens the main window's confirmation dialog; it never installs directly.
+// Clicking the button is the user's confirmation; the tray menu still asks in a dialog.
 LRESULT SettingsWindow::WmCommandBtnInstallUpdate(HWND hWnd, WPARAM wParam, LPARAM lParam)
 {
-	SettingsWindow::SendNotifcation(IDM_INSTALL_UPDATE, nullptr);
+	SettingsWindow::SendNotifcation(IDM_INSTALL_UPDATE_NOW, nullptr);
 	return 0;
+}
+
+LRESULT SettingsWindow::WmCommandBtnUpdateLater(HWND hWnd, WPARAM wParam, LPARAM lParam)
+{
+	SetUpdateStatus(L"You can install the update later here or from the tray menu.");
+	SettingsWindow::SendNotifcation(IDM_UPDATE_LATER, nullptr);
+	return 0;
+}
+
+void SettingsWindow::ShowUpdateControls(bool show)
+{
+	for (int id : { LNK_RELEASE_NOTES, LBL_UPDATE_NOTE, BTN_INSTALL_UPDATE, BTN_UPDATE_LATER })
+	{
+		ShowWindow(GetDlgItem(windowHandle, id), show ? SW_SHOW : SW_HIDE);
+	}
 }
 
 void SettingsWindow::SetUpdateStatus(const std::wstring & text, bool installable)
 {
 	SetDlgItemTextW(windowHandle, LBL_UPDATE_STATUS, text.c_str());
 	updateInstallable = installable;
+	if (installable)
+	{
+		const std::wstring link = L"<a href=\"" + Updater::ReleaseNotesUrl() + L"\">See what's new</a>";
+		SetDlgItemTextW(windowHandle, LNK_RELEASE_NOTES, link.c_str());
+	}
 	const bool onUpdatesPage = SendMessageW(navigationList, LB_GETCURSEL, 0, 0) == PAGE_UPDATES;
-	ShowWindow(GetDlgItem(windowHandle, BTN_INSTALL_UPDATE), installable && onUpdatesPage ? SW_SHOW : SW_HIDE);
+	ShowUpdateControls(installable && onUpdatesPage);
 }
 
 LRESULT SettingsWindow::WmNotify(HWND hWnd, WPARAM wParam, LPARAM lParam)
 {
 	const NMHDR * header = reinterpret_cast<const NMHDR *>(lParam);
-	if (header->idFrom == LNK_REPOSITORY && (header->code == NM_CLICK || header->code == NM_RETURN))
+	if ((header->idFrom == LNK_REPOSITORY || header->idFrom == LNK_RELEASE_NOTES) && (header->code == NM_CLICK || header->code == NM_RETURN))
 	{
 		const NMLINK * link = reinterpret_cast<const NMLINK *>(lParam);
 		if (wcsncmp(link->item.szUrl, L"https://github.com/tomcek42/Winclipper", 38) == 0)
@@ -1150,7 +1170,13 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	AddText(left, top + 84, 280, 16, L"Installed version:", LBL_INSTALLED_VERSION, hInstance);
 	AddButton(left, top + 108, 110, L"Check &now", BTN_CHECK_UPDATES, hInstance);
 	AddText(left, top + 140, 280, 32, L"", LBL_UPDATE_STATUS, hInstance);
-	AddButton(left, top + 176, 110, L"&Install update...", BTN_INSTALL_UPDATE, hInstance);
+	HWND notesLink = CreateWindowExW(0, WC_LINK, L"", WS_CHILD | WS_TABSTOP, ScaleX(left), ScaleY(top + 176),
+		ScaleX(280), ScaleY(18), hWnd, reinterpret_cast<HMENU>(LNK_RELEASE_NOTES), hInstance, nullptr);
+	SendMessageW(notesLink, WM_SETFONT, reinterpret_cast<WPARAM>(hFontStd), FALSE);
+	AddText(left, top + 200, 280, 32, L"Installing needs administrator rights. Winclipper closes during the installation and starts again afterwards.",
+		LBL_UPDATE_NOTE, hInstance);
+	AddButton(left, top + 240, 110, L"&Install update", BTN_INSTALL_UPDATE, hInstance);
+	AddButton(left + 118, top + 240, 80, L"&Later", BTN_UPDATE_LATER, hInstance);
 	AssignNewControlsToPage(PAGE_UPDATES);
 
 	// About

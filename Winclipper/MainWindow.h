@@ -75,6 +75,8 @@ private:
 	void						StopBlinking();
 	void						PromptInstallUpdate();
 	LRESULT						WmCommandIdmInstallUpdate(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	LRESULT						WmCommandIdmInstallUpdateNow(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	LRESULT						WmCommandIdmUpdateLater(HWND hWnd, WPARAM wParam, LPARAM lParam);
 public:
 								MainWindow(HINSTANCE hInstance, SettingsWindow & settingsWindow);
 								~MainWindow();

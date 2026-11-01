@@ -3,6 +3,12 @@
 Changes in this fork compared to `Carson-Shook/Winclipper` 1.4.2. Details on each finding:
 `docs/SECURITY-FINDINGS.md`.
 
+## Unreleased
+
+### Changes
+- Settings > Updates shows "See what's new", "Install update" and "Later" directly when an update is found.
+  "Install update" there starts the installation without a second dialog; the tray menu still asks in a dialog.
+
 ## 1.6.4 (2026-11-01)
 
 ### Security

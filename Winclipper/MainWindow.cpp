@@ -71,6 +71,12 @@ LRESULT MainWindow::MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		case IDM_INSTALL_UPDATE:
 			pThis->WmCommandIdmInstallUpdate(hWnd, wParam, lParam);
 			break;
+		case IDM_INSTALL_UPDATE_NOW:
+			pThis->WmCommandIdmInstallUpdateNow(hWnd, wParam, lParam);
+			break;
+		case IDM_UPDATE_LATER:
+			pThis->WmCommandIdmUpdateLater(hWnd, wParam, lParam);
+			break;
 		case IDM_ABOUT:
 			pThis->WmCommandIdmAbout(hWnd, wParam, lParam);
 			break;
@@ -433,6 +439,23 @@ void MainWindow::PromptInstallUpdate()
 LRESULT MainWindow::WmCommandIdmInstallUpdate(HWND hWnd, WPARAM wParam, LPARAM lParam)
 {
 	PromptInstallUpdate();
+	return 0;
+}
+
+// From the Settings page, where clicking "Install update" is the confirmation.
+LRESULT MainWindow::WmCommandIdmInstallUpdateNow(HWND hWnd, WPARAM wParam, LPARAM lParam)
+{
+	if (!Updater::AvailableVersion().empty())
+	{
+		StopBlinking();
+		Updater::InstallAvailable();
+	}
+	return 0;
+}
+
+LRESULT MainWindow::WmCommandIdmUpdateLater(HWND hWnd, WPARAM wParam, LPARAM lParam)
+{
+	StopBlinking();
 	return 0;
 }
 

@@ -55,6 +55,9 @@
 #define CHK_HISTORY_MARKER_IGN  235
 #define BTN_INSTALL_UPDATE      237
 #define ICO_INFO                238
+#define BTN_UPDATE_LATER        239
+#define LNK_RELEASE_NOTES       240
+#define LBL_UPDATE_NOTE         241
 
 
 class SettingsWindow : public Notify
@@ -116,6 +119,8 @@ private:
 	LRESULT						WmCommandBtnRemoveExcluded(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandBtnCheckUpdates(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandBtnInstallUpdate(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	LRESULT						WmCommandBtnUpdateLater(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	void						ShowUpdateControls(bool show);
 
 	enum Page { PAGE_GENERAL, PAGE_CLIPS, PAGE_IMAGES, PAGE_UPDATES, PAGE_ABOUT, PAGE_COUNT };
 	HWND						navigationList = nullptr;
@@ -159,7 +164,7 @@ public:
 	bool						InitSettingsWindow(HINSTANCE hInstance);
 	HWND						GetHandle() noexcept;
 	// Result of "Check now", shown below the button instead of a message box.
-	// installable shows a button that opens the confirmation dialog for the found update.
+	// installable shows the release notes link and the Install and Later buttons.
 	void						SetUpdateStatus(const std::wstring & text, bool installable = false);
 private:
 	bool						updateInstallable = false;
