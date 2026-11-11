@@ -235,13 +235,39 @@ INT_PTR CALLBACK MainWindow::About(HWND hDlg, UINT message, WPARAM wParam, LPARA
 
 LRESULT MainWindow::WmCommandIdmClearClips(HWND hWnd, WPARAM wParam, LPARAM lParam)
 {
-	int choice = MessageBoxA(hWnd,
-		"This will delete all clips on the Winclipper clipboard.\r\n\r\n Are you sure you want to do this?", "Winclipper",
-		MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2 | MB_TASKMODAL | MB_SETFOREGROUND);
+	TASKDIALOGCONFIG config = {};
+	config.cbSize = sizeof(config);
+	config.hwndParent = hWnd;
+	// No TDF_POSITION_RELATIVE_TO_WINDOW: the owner is the hidden main window in
+	// the top-left corner; without it the dialog is centered on the monitor.
+	config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION;
+	// Buttons instead of a verification checkbox: Windows draws that checkbox
+	// with its label slightly off-center, and we cannot move it.
+	enum { ID_CLEAR_UNPINNED = 100, ID_CLEAR_ALL = 101 };
+	const TASKDIALOG_BUTTON buttons[] = {
+		{ ID_CLEAR_UNPINNED, L"Clear &unpinned clips" },
+		{ ID_CLEAR_ALL, L"Clear &all clips" },
+	};
+	config.cButtons = ARRAYSIZE(buttons);
+	config.pButtons = buttons;
+	config.dwCommonButtons = TDCBF_CANCEL_BUTTON;
+	config.nDefaultButton = IDCANCEL;
+	config.pszWindowTitle = L"Winclipper";
+	config.pszMainIcon = TD_WARNING_ICON;
+	config.pszMainInstruction = L"Clear clips?";
+	config.pszContent = L"Pinned clips are kept unless you choose \"Clear all clips\".";
 
-	if (choice == IDYES)
+	int pressed = IDCANCEL;
+	if (SUCCEEDED(TaskDialogIndirect(&config, &pressed, nullptr, nullptr)))
 	{
-		cManager->ClearClips();
+		if (pressed == ID_CLEAR_UNPINNED)
+		{
+			cManager->ClearClips(false);
+		}
+		else if (pressed == ID_CLEAR_ALL)
+		{
+			cManager->ClearClips(true);
+		}
 	}
 	return 0;
 }
@@ -627,8 +653,22 @@ LRESULT MainWindow::WmInitMenu(HWND hWnd, WPARAM wParam, LPARAM lParam)
 
 LRESULT MainWindow::WmMenuRButtonUp(HWND hWnd, WPARAM wParam, LPARAM lParam)
 {
+	// wParam is the item position, which also counts non-clip items
+	// (More..., separators, Settings). Clip items carry the ID index + 1
+	// in both the top menu and the More... submenu, so use that.
+	const UINT itemId = GetMenuItemID(reinterpret_cast<HMENU>(lParam), static_cast<int>(wParam));
+	if (itemId == static_cast<UINT>(-1) || itemId < 1 || itemId > cManager->GetSize())
+	{
+		return 0;
+	}
+	const unsigned int clipIndex = itemId - 1;
+
+	constexpr int DELETE_SELECT = 1;
+	constexpr int PIN_SELECT = 2;
+
 	HMENU menu = CreatePopupMenu();
-	AppendMenuW(menu, MF_STRING, 1, L"Delete");
+	AppendMenuW(menu, MF_STRING, PIN_SELECT, cManager->IsClipPinnedAt(clipIndex) ? L"Unpin" : L"Pin");
+	AppendMenuW(menu, MF_STRING, DELETE_SELECT, L"Delete");
 
 	POINT cPos = { 0, 0 };
 	if (!GetCursorPos(&cPos))
@@ -648,18 +688,16 @@ LRESULT MainWindow::WmMenuRButtonUp(HWND hWnd, WPARAM wParam, LPARAM lParam)
 	);
 	DestroyMenu(menu);
 
-	if (menuSelection == 1)
+	// The clips menu was built from the old order; close it after a change.
+	if (menuSelection == DELETE_SELECT)
 	{
-		// wParam is the item position, which also counts non-clip items
-		// (More..., separators, Settings). Clip items carry the ID index + 1
-		// in both the top menu and the More... submenu, so use that.
-		const UINT itemId = GetMenuItemID(reinterpret_cast<HMENU>(lParam), static_cast<int>(wParam));
-
-		if (itemId != static_cast<UINT>(-1) && itemId >= 1 && itemId <= cManager->GetSize())
-		{
-			cManager->DeleteClipAt(itemId - 1);
-			PostMessageW(hWnd, WM_CANCELMODE, 0, 0);
-		}
+		cManager->DeleteClipAt(clipIndex);
+		PostMessageW(hWnd, WM_CANCELMODE, 0, 0);
+	}
+	else if (menuSelection == PIN_SELECT)
+	{
+		cManager->TogglePinAt(clipIndex);
+		PostMessageW(hWnd, WM_CANCELMODE, 0, 0);
 	}
 
 	return 0;

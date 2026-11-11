@@ -33,6 +33,16 @@ void Clip::MarkForDelete() noexcept
 	shouldDelete = true;
 }
 
+bool Clip::IsPinned() const noexcept
+{
+	return pinned;
+}
+
+void Clip::SetPinned(bool value) noexcept
+{
+	pinned = value;
+}
+
 /* ISerializable member function implementations */
 
 std::string Clip::Serialize() 
@@ -58,6 +68,13 @@ std::string Clip::Serialize()
 			data.append(std::to_string(bitmapHeight));
 			data.push_back(UNIT_SEPARATOR_CHAR);
 			data.append(std::to_string(bitmapWidth));
+		}
+		if (pinned)
+		{
+			data.push_back(RECORD_SEPARATOR_CHAR);
+			data.append(std::to_string(CLIP_RECORD_PINNED));
+			data.push_back(UNIT_SEPARATOR_CHAR);
+			data.append("1");
 		}
 	}
 	return data;
@@ -119,6 +136,11 @@ void Clip::Deserialize(std::string serializationData)
 							bitmapWidth = std::stol(units.at(3));
 							// The thumbnail is created on first use; doing it here
 							// would decrypt every cached image at startup.
+							break;
+						case CLIP_RECORD_PINNED:
+							// Only the flag; it adds no format, so a record
+							// of its own still yields no clip.
+							pinned = units.size() > 1 && units.at(1) == "1";
 							break;
 						default:
 							break;

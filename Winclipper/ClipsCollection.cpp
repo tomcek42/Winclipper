@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "ClipsCollection.h"
+#include <algorithm>
 
 
 ClipsCollection::ClipsCollection() noexcept
@@ -47,6 +48,11 @@ void ClipsCollection::Deserialize(std::string serializationData)
 
 		while (std::getline(stream, readData))
 		{
+			// Serialize ends each clip with CR LF but getline only strips LF.
+			if (!readData.empty() && readData.back() == '\r')
+			{
+				readData.pop_back();
+			}
 			std::shared_ptr<Clip> clip = std::make_shared<Clip>();
 
 			try
@@ -65,6 +71,8 @@ void ClipsCollection::Deserialize(std::string serializationData)
 			}
 		}
 
+		NormalizePinOrder();
+
 		if (corruptedClips > 0)
 		{
 			std::string message(std::to_string(corruptedClips));
@@ -81,27 +89,45 @@ void ClipsCollection::Deserialize(std::string serializationData)
 	}
 }
 
+// clips.dat is untrusted: pin records may appear in any order, so restore the
+// pinned-block invariant after loading instead of relying on the file's order.
+void ClipsCollection::NormalizePinOrder()
+{
+	std::lock_guard<std::mutex> lock(clipsMutex);
+	std::stable_partition(clips.begin(), clips.end(),
+		[](const std::shared_ptr<Clip>& clip) { return clip->IsPinned(); });
+}
+
 /* End ISerializable implementation */
 
 void ClipsCollection::AddFront(std::shared_ptr<Clip> clip)
 {
 	std::lock_guard<std::mutex> lock(clipsMutex);
-	if (clips.empty())
+	const size_t pinnedCount = PinnedCountLocked();
+
+	// New clips go in front of the unpinned clips, below the pinned block.
+	// Skip the clip if it repeats the newest unpinned clip or any pinned clip.
+	bool duplicate = false;
+	for (size_t i = 0; i < clips.size() && i <= pinnedCount && !duplicate; i++)
 	{
-		clips.push_front(clip);
+		try
+		{
+			duplicate = clip->Equals(clips.at(i));
+		}
+		catch (const std::exception&)
+		{
+			// A clip whose cached bitmap cannot be loaded is not a duplicate.
+		}
 	}
-	else
+
+	if (duplicate)
 	{
-		if (!clip->Equals(clips.front()))
-		{
-			clips.push_front(clip);
-			TrimToMaxSize();
-		}
-		else
-		{
-			clip->MarkForDelete();
-		}
+		clip->MarkForDelete();
+		return;
 	}
+
+	clips.insert(clips.begin() + pinnedCount, clip);
+	TrimToMaxSize();
 }
 
 void ClipsCollection::RemoveAllOfFormat(DWORD format)
@@ -138,6 +164,30 @@ std::shared_ptr<Clip> ClipsCollection::RemoveAt(unsigned int index)
 	}
 
 	return clip;
+}
+
+// Pins an unpinned clip (it goes to the end of the pinned block) or unpins a
+// pinned one (it becomes the newest unpinned clip). Returns false if the
+// index is out of range.
+bool ClipsCollection::TogglePinAt(unsigned int index)
+{
+	std::lock_guard<std::mutex> lock(clipsMutex);
+	if (index >= clips.size())
+	{
+		return false;
+	}
+
+	std::shared_ptr<Clip> clip = clips.at(index);
+	clips.erase(clips.begin() + index);
+	clip->SetPinned(!clip->IsPinned());
+	clips.insert(clips.begin() + PinnedCountLocked(), clip);
+	return true;
+}
+
+unsigned int ClipsCollection::PinnedCount()
+{
+	std::lock_guard<std::mutex> lock(clipsMutex);
+	return static_cast<unsigned int>(PinnedCountLocked());
 }
 
 std::shared_ptr<Clip> ClipsCollection::At(size_t index)
@@ -181,15 +231,15 @@ void ClipsCollection::SetMaxSize(unsigned int newMaxSize)
 	}
 }
 
-void ClipsCollection::Clear()
+void ClipsCollection::Clear(bool includePinned)
 {
 	std::lock_guard<std::mutex> lock(clipsMutex);
-	const size_t size = clips.size();
-	for (size_t i = 0; i < size; i++)
+	const size_t pinnedCount = includePinned ? 0 : PinnedCountLocked();
+	for (size_t i = pinnedCount; i < clips.size(); i++)
 	{
 		clips.at(i)->MarkForDelete();
 	}
-	clips.clear();
+	clips.erase(clips.begin() + pinnedCount, clips.end());
 }
 
 void ClipsCollection::PurgeThumbnails()
@@ -219,12 +269,25 @@ std::deque<std::shared_ptr<Clip>> ClipsCollection::Snapshot()
 	return clips;
 }
 
-// Caller must hold clipsMutex.
+// Caller must hold clipsMutex. Pinned clips are never trimmed; if they alone
+// reach the limit, the newest unpinned clip is still kept.
 void ClipsCollection::TrimToMaxSize()
 {
-	while (clips.size() > maxSize)
+	const size_t limit = (std::max)(static_cast<size_t>(maxSize), PinnedCountLocked() + 1);
+	while (clips.size() > limit)
 	{
 		clips.back()->MarkForDelete();
 		clips.pop_back();
 	}
+}
+
+// Caller must hold clipsMutex.
+size_t ClipsCollection::PinnedCountLocked() const
+{
+	size_t count = 0;
+	while (count < clips.size() && clips.at(count)->IsPinned())
+	{
+		count++;
+	}
+	return count;
 }

@@ -3,6 +3,14 @@
 Changes in this fork compared to `Carson-Shook/Winclipper` 1.4.2. Details on each finding:
 `docs/SECURITY-FINDINGS.md`.
 
+## Unreleased
+
+### Changes
+- Clips can be pinned: right-click a clip in the menu and choose "Pin" or "Unpin". Pinned clips stay at the top
+  of the menu above a separator, are never removed when the list reaches its maximum size, and keep their place
+  when pasted. The pin state is saved encrypted in the clips file; older versions ignore it.
+- "Clear Clips" asks whether to clear only unpinned clips or all clips. The dialog is centered on the monitor.
+
 ## 1.6.5 (2026-11-01)
 
 ### Changes

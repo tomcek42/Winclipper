@@ -8,6 +8,10 @@
 #include "base64.h"
 #include "ISerializable.h"
 
+// Pseudo clipboard format for the pin record in clips.dat. 0 is never a
+// valid clipboard format, and older versions skip unknown records.
+constexpr DWORD CLIP_RECORD_PINNED = 0;
+
 class Clip : public ISerializable, public std::enable_shared_from_this<Clip>
 {
 public:
@@ -15,6 +19,9 @@ public:
 	~Clip();
 
 	void						MarkForDelete() noexcept;
+
+	bool						IsPinned() const noexcept;
+	void						SetPinned(bool value) noexcept;
 
 	std::string					Serialize() override;
 	void						Deserialize(std::string serializationData) override;
@@ -61,6 +68,8 @@ private:
 	size_t						lastKnownMenuTextLength = 0;
 
 	std::atomic<bool>			isLoadingBitmap{ false };
+	// Read by the clips writer thread while the UI thread may change it.
+	std::atomic<bool>			pinned{ false };
 	bool						shouldDelete = false;
 
 	std::string					GetBase64FromWString(const std::wstring data);

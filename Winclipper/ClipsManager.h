@@ -58,11 +58,13 @@ public:
 
 	void                            RecreateThumbnails();
 
-    void                            ClearClips(void);
+    void                            ClearClips(bool includePinned);
     bool                            AddToClips(HWND hWnd);
     bool                            SetClipboardToClipAtIndex(HWND hWnd, unsigned int index);
 	const unsigned int				GetSize() noexcept;
 	void							DeleteClipAt(unsigned int index);
+	void							TogglePinAt(unsigned int index);
+	bool							IsClipPinnedAt(unsigned int index);
 	std::shared_ptr<Clip>			GetClipAt(unsigned int index);
 	void							ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit);
 	void							SelectDefaultMenuItem(bool select2ndClip) noexcept;

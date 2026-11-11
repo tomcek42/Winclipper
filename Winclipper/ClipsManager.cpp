@@ -189,9 +189,9 @@ void ClipsManager::RecreateThumbnails()
 	clips.PurgeThumbnails();
 }
 
-void ClipsManager::ClearClips()
+void ClipsManager::ClearClips(bool includePinned)
 {
-	clips.Clear();
+	clips.Clear(includePinned);
     SaveClipsAsync();
 }
 
@@ -565,7 +565,14 @@ bool ClipsManager::SetClipboardToClipAtIndex(HWND hWnd, unsigned int index)
 
     EmptyClipboard();
 
-	std::shared_ptr<Clip> clip = index == 0 ? GetClipAt(index) : clips.RemoveAt(index);
+	// Pinned clips keep their place; other clips move to the top of the
+	// unpinned clips once they are pasted.
+	std::shared_ptr<Clip> clip = GetClipAt(index);
+	const bool moveToFront = clip != nullptr && index != 0 && !clip->IsPinned();
+	if (moveToFront)
+	{
+		clip = clips.RemoveAt(index);
+	}
 
 	if (clip != nullptr)
 	{
@@ -630,7 +637,7 @@ bool ClipsManager::SetClipboardToClipAtIndex(HWND hWnd, unsigned int index)
 			}
 		}
 
-		if (index != 0)
+		if (moveToFront)
 		{
 			clips.AddFront(clip);
 		}
@@ -653,6 +660,20 @@ void ClipsManager::DeleteClipAt(unsigned int index)
 		clip->MarkForDelete();
 		SaveClipsAsync();
 	}
+}
+
+void ClipsManager::TogglePinAt(unsigned int index)
+{
+	if (clips.TogglePinAt(index))
+	{
+		SaveClipsAsync();
+	}
+}
+
+bool ClipsManager::IsClipPinnedAt(unsigned int index)
+{
+	auto clip = GetClipAt(index);
+	return clip != nullptr && clip->IsPinned();
 }
 
 std::shared_ptr<Clip> ClipsManager::GetClipAt(unsigned int index)
@@ -747,9 +768,16 @@ void ClipsManager::ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit)
         if (curSize > 0)
         {
             unsigned int j = curSize > UserSettings::MaxDisplayClips() ? UserSettings::MaxDisplayClips() : curSize;
+			const unsigned int pinnedCount = clips.PinnedCount();
 
             for (unsigned int i = 0; i < j; i++)
             {
+				// Separates the pinned clips from the others. Separators have
+				// ID 0, so the right-click handler ignores them.
+				if (i == pinnedCount && i > 0)
+				{
+					AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+				}
                 std::shared_ptr<Clip> clip = GetClipAt(i);
                 if (clip != nullptr)
                 {
