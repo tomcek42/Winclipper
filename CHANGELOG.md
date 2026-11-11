@@ -3,7 +3,7 @@
 Changes in this fork compared to `Carson-Shook/Winclipper` 1.4.2. Details on each finding:
 `docs/SECURITY-FINDINGS.md`.
 
-## Unreleased
+## 1.6.6 (2026-11-11)
 
 ### Changes
 - Clips can be pinned: right-click a clip in the menu and choose "Pin" or "Unpin". Pinned clips stay at the top
