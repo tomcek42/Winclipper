@@ -24,6 +24,9 @@ build the EXE: first build the EXE for the platform with msbuild (x86: `-p:Platf
 The setup entries in `Winclipper.sln` use the WiX SDK project type; a full `.sln` build (without `-t:`) also builds the
 platform's MSI. The VC141 CRT merge modules were removed because the EXE links the CRT statically.
 
+Every release gets an entry in both `CHANGELOG.md` (detailed) and the `## Changelog` section of `README.md`
+(short summary, newest first, format `**x.y.z** - date (this fork)`). Keep them in sync.
+
 The version number lives in three places: `Winclipper/Winclipper.rc` (`VERSIONINFO`) and the `Version` attribute in
 both `Setup-*/Product.wxs`. Bump them together.
 

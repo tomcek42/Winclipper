@@ -31,6 +31,29 @@ build an installer on its own, build the EXE first and then run `dotnet build -c
 
 ## Changelog
 
+**1.6.6** - 2026-11-11 (this fork)
+
+- Pin clips: right-click a clip and choose "Pin" or "Unpin". Pinned clips stay at the top and are never removed automatically.
+- "Clear Clips" asks whether to clear only unpinned clips or all clips; the dialog is centered on the monitor.
+
+**1.6.5** - 2026-11-01 (this fork)
+
+- Settings > Updates shows "See what's new", "Install update" and "Later" directly when an update is found.
+
+**1.6.4** - 2026-11-01 (this fork)
+
+Security release. See [CHANGELOG.md](CHANGELOG.md) for details.
+- The image identifier of a saved clip is checked before it is used as a file name (F15).
+- Releases are signed in a separate, owner-approved CI job (F16).
+- The "Always record" list for private content is empty by default; 1Password is no longer on it for new installations.
+- Unencrypted clip files from versions before 1.5.0 are no longer read.
+
+**1.6.3** - 2026-10-29 (this fork)
+
+- Fixed the "Always record" list never matching programs without an owner window, such as 1Password.
+- New "Never record clips from these programs" list and an option to record clips from RDP sessions.
+- "Check now" shows its result on the Settings page; clearer labels on the Clips page.
+
 **1.6.2** - 2026-10-13 (this fork)
 
 - Fixed installing updates (1.6.0 and 1.6.1 cannot update themselves; install 1.6.2 manually).
