@@ -51,6 +51,15 @@ Check installed toolsets:
 - The Settings pages are not child dialogs: all controls are children of the settings window, and
   `AssignNewControlsToPage` records which page each belongs to. Create new controls inside the right page block,
   before its `AssignNewControlsToPage` call, or they show on every page.
+- The main window is hidden and sits at 0,0. Dialogs owned by it (TaskDialog, MessageBox) must not use
+  `TDF_POSITION_RELATIVE_TO_WINDOW`, or they appear in the top-left corner instead of centered on the monitor.
+- `clips.dat` lines end in CR LF but `std::getline` strips only LF; `ClipsCollection::Deserialize` removes the CR.
+  Keep that, or string fields at the end of a line (e.g. the pin record) no longer compare equal.
+- Pinned clips: the pin flag is an extra record with pseudo format `CLIP_RECORD_PINNED` (0) per clip. Pinned clips
+  form a block at the front of `ClipsCollection` (restored with `NormalizePinOrder` after loading, never taken from
+  file order), are never trimmed, and survive "Clear unpinned clips".
+- The TaskDialog verification checkbox is misaligned at >100 % scaling and cannot be fixed; use buttons instead.
+- A running Winclipper locks the EXE (LNK1104). Stop it before building (`taskkill /IM Winclipper.exe /F`).
 
 ## Security conventions for changes
 
