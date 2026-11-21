@@ -86,6 +86,9 @@ LRESULT MainWindow::MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 		case NTF_CMENUHOTKEY_CHANGED:
 			pThis->WmCommandNtfCmenuHotkeyChanged(hWnd, wParam, lParam);
 			break;
+		case NTF_SEARCHHOTKEY_CHANGED:
+			pThis->WmCommandNtfSearchHotkeyChanged(hWnd, wParam, lParam);
+			break;
 		case NTF_MAXDISPLAY_CHANGED:
 			pThis->WmCommandNtfMaxDisplayChanged(hWnd, wParam, lParam);
 			break;
@@ -320,6 +323,13 @@ LRESULT MainWindow::WmCommandNtfCmenuHotkeyChanged(HWND hWnd, WPARAM wParam, LPA
 	return 0;
 }
 
+LRESULT MainWindow::WmCommandNtfSearchHotkeyChanged(HWND hWnd, WPARAM wParam, LPARAM lParam)
+{
+	UnregisterHotKey(GetHandle(), ID_REG_SEARCH_HOTKEY);
+	RegisterHotKey(GetHandle(), ID_REG_SEARCH_HOTKEY, HIBYTE(UserSettings::SearchHotkeyTrl()), LOBYTE(UserSettings::SearchHotkeyTrl()));
+	return 0;
+}
+
 LRESULT MainWindow::WmCommandNtfMaxDisplayChanged(HWND hWnd, WPARAM wParam, LPARAM lParam)
 {
 	return 0;
@@ -528,7 +538,7 @@ LRESULT MainWindow::WmappNCallNinKeySelect(HWND hWnd, WPARAM wParam, LPARAM lPar
 			cPos.x = 10;
 			cPos.y = 10;
 		}
-		cManager->ShowClipsMenu(GetHandle(), &cPos, true);
+		cManager->ShowClipsMenu(GetHandle(), &cPos, true, false, PreviewCallback());
 		previewWindow->ClearCache();
 		ninKeypressLocked = false;
 	}
@@ -556,7 +566,7 @@ LRESULT MainWindow::WmappNCallWmContextMenu(HWND hWnd, WPARAM wParam, LPARAM lPa
 		cPos.x = 10;
 		cPos.y = 10;
 	}
-	cManager->ShowClipsMenu(GetHandle(), &cPos, true);
+	cManager->ShowClipsMenu(GetHandle(), &cPos, true, false, PreviewCallback());
 	previewWindow->ClearCache();
 
 	return 0;
@@ -600,7 +610,7 @@ LRESULT MainWindow::WmHotkey(HWND hWnd, WPARAM wParam, LPARAM lParam)
 		cPos.x = 10;
 		cPos.y = 10;
 	}
-	cManager->ShowClipsMenu(GetHandle(), &cPos, false);
+	cManager->ShowClipsMenu(GetHandle(), &cPos, false, wParam == ID_REG_SEARCH_HOTKEY, PreviewCallback());
 	previewWindow->ClearCache();
 
 	return 0;
@@ -801,9 +811,30 @@ LRESULT MainWindow::WmRestartTaskbar(HWND hWnd, WPARAM wParam, LPARAM lParam)
 // comparing the previous mouse location against the current, and if
 // they are different, we check to see if they are now selecting a
 // menuItem. If not, then hide the preview window.
+// Shows the preview beside a highlighted clip in the clips menu or picker.
+std::function<void(int, const RECT *)> MainWindow::PreviewCallback()
+{
+	return [this](int clipIndex, const RECT * rect)
+	{
+		if (previewWindow == nullptr || cManager == nullptr)
+		{
+			return;
+		}
+		if (clipIndex < 0 || rect == nullptr || static_cast<unsigned int>(clipIndex) >= cManager->GetSize())
+		{
+			previewWindow->Hide();
+			return;
+		}
+		previewWindow->SetPreviewClip(cManager->GetClipAt(static_cast<unsigned int>(clipIndex)));
+		RECT itemRect = *rect;
+		previewWindow->MoveRelativeToRect(&itemRect, static_cast<unsigned int>(clipIndex) + 1);
+		previewWindow->Show();
+	};
+}
+
 LRESULT MainWindow::WndProcDefault(HWND hWnd, WPARAM wParam, LPARAM lParam)
 {
-	if (previewWindow != nullptr && IsWindowVisible(previewWindow->GetHandle()))
+	if (previewWindow != nullptr && activePopupMenu != nullptr && IsWindowVisible(previewWindow->GetHandle()))
 	{
 		POINT cPos = { 0, 0 };
 		if (GetCursorPos(&cPos))
@@ -917,6 +948,7 @@ bool MainWindow::InitMainWindow(HINSTANCE hInstance)
 
 	// Register the hotkey that we have stored in settings
 	RegisterHotKey(hWnd, ID_REG_HOTKEY, HIBYTE(UserSettings::ClipsMenuHotkeyTrl()), LOBYTE(UserSettings::ClipsMenuHotkeyTrl()));
+	RegisterHotKey(hWnd, ID_REG_SEARCH_HOTKEY, HIBYTE(UserSettings::SearchHotkeyTrl()), LOBYTE(UserSettings::SearchHotkeyTrl()));
 
 	ShowWindow(hWnd, SW_HIDE);
 	UpdateWindow(hWnd);

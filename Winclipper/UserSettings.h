@@ -58,6 +58,13 @@
 #define HISTORY_MARKER_IGNORED		14
 #define HISTORY_MARKER_IGNORED_DEF	false
 
+// Global shortcut that opens the clip picker with the search box.
+#define SEARCH_HOTKEY		15
+#define SEARCH_HOTKEY_DEF	MAKEWORD(0x46, HOTKEYF_CONTROL | HOTKEYF_SHIFT)
+
+// Not in resource.h (UTF-16, edited by the resource editor).
+#define NTF_SEARCHHOTKEY_CHANGED	410
+
 // Save and load user settings to and from disk
 class UserSettings : public Notify
 {
@@ -67,6 +74,8 @@ private:
     static int				maxSavedClips;
     static int				menuDisplayChars;
     static WORD				clipsMenuHotkey;
+    static WORD				searchHotkey;
+    static WORD				TranslateHotkey(WORD hotkey);
     static bool				saveToDisk;
     static bool				select2ndClip;
     static bool				showPreview;
@@ -127,6 +136,10 @@ public:
 	static WORD				ClipsMenuHotkey();
 	static WORD				ClipsMenuHotkeyTrl();
 	static void				SetClipsMenuHotkey(WORD clipsMenuHotkey);
+
+	static WORD				SearchHotkey();
+	static WORD				SearchHotkeyTrl();
+	static void				SetSearchHotkey(WORD searchHotkey);
 
 	static bool				SaveToDisk();
 	static void				SetSaveToDisk(bool saveToDisk);

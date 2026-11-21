@@ -43,6 +43,7 @@ private:
 	LRESULT						WmCommandIdmAbout(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandIdmExit(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandNtfCmenuHotkeyChanged(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	LRESULT						WmCommandNtfSearchHotkeyChanged(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandNtfMaxDisplayChanged(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandNtfMaxSavedChanged(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandNtfMenuCharsChanged(HWND hWnd, WPARAM wParam, LPARAM lParam);
@@ -66,6 +67,7 @@ private:
 	LRESULT						WmMenuSelect(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmRestartTaskbar(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WndProcDefault(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	std::function<void(int, const RECT *)>	PreviewCallback();
 
 	bool						AddNotificationIcon(HWND hWnd, HINSTANCE hInstance);
 	bool						DeleteNotificationIcon();

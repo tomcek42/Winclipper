@@ -7,6 +7,7 @@ int	UserSettings::maxDisplayClips;
 int	UserSettings::maxSavedClips;
 int	UserSettings::menuDisplayChars;
 WORD UserSettings::clipsMenuHotkey;
+WORD UserSettings::searchHotkey;
 bool UserSettings::saveToDisk;
 bool UserSettings::select2ndClip;
 bool UserSettings::showPreview;
@@ -88,6 +89,7 @@ void UserSettings::InitializeSettings()
 	maxSavedClips = MAX_SAVED_DEF;
 	menuDisplayChars = MENU_CHARS_DEF;
 	clipsMenuHotkey = CMENU_HOTKEY_DEF;
+	searchHotkey = SEARCH_HOTKEY_DEF;
 	saveToDisk = SAVE_TO_DISK_DEF;
 	select2ndClip = SLCT_2ND_CLIP_DEF;
 	showPreview = SHOW_PREVIEW_DEF;
@@ -239,13 +241,13 @@ WORD UserSettings::ClipsMenuHotkey()
 // two different kinds of hotkeys.
 WORD UserSettings::ClipsMenuHotkeyTrl()
 {
-    if (clipsMenuHotkey == 0)
-    {
-        clipsMenuHotkey = CMENU_HOTKEY_DEF;
-    }
+    return TranslateHotkey(ClipsMenuHotkey());
+}
 
-    const BYTE lByte = LOBYTE(clipsMenuHotkey);
-    const BYTE hByte = HIBYTE(clipsMenuHotkey);
+WORD UserSettings::TranslateHotkey(WORD hotkey)
+{
+    const BYTE lByte = LOBYTE(hotkey);
+    const BYTE hByte = HIBYTE(hotkey);
 
     BYTE hByteAdjusted = 0;
 
@@ -275,6 +277,30 @@ void UserSettings::SetClipsMenuHotkey(WORD clipsMenuHotkey)
     {
         UserSettings::clipsMenuHotkey = clipsMenuHotkey;
 		UserSettings::SendNotifcation(NTF_CMENUHOTKEY_CHANGED, nullptr);
+        SaveSettingsAsync();
+    }
+}
+
+WORD UserSettings::SearchHotkey()
+{
+    if (searchHotkey == 0)
+    {
+        searchHotkey = SEARCH_HOTKEY_DEF;
+    }
+    return searchHotkey;
+}
+
+WORD UserSettings::SearchHotkeyTrl()
+{
+    return TranslateHotkey(SearchHotkey());
+}
+
+void UserSettings::SetSearchHotkey(WORD searchHotkey)
+{
+    if (searchHotkey != UserSettings::searchHotkey)
+    {
+        UserSettings::searchHotkey = searchHotkey;
+		UserSettings::SendNotifcation(NTF_SEARCHHOTKEY_CHANGED, nullptr);
         SaveSettingsAsync();
     }
 }
@@ -579,6 +605,7 @@ std::vector<std::wstring> UserSettings::Serialize()
         (std::to_wstring(MAX_SAVED) + SEPARATOR + std::to_wstring(MaxSavedClips())),
         (std::to_wstring(MENU_CHARS) + SEPARATOR + std::to_wstring(MenuDisplayChars())),
         (std::to_wstring(CMENU_HOTKEY) + SEPARATOR + std::to_wstring(ClipsMenuHotkey())),
+        (std::to_wstring(SEARCH_HOTKEY) + SEPARATOR + std::to_wstring(SearchHotkey())),
         (std::to_wstring(SAVE_TO_DISK) + SEPARATOR + std::to_wstring(SaveToDisk())),
         (std::to_wstring(SLCT_2ND_CLIP) + SEPARATOR + std::to_wstring(Select2ndClip())),
 		(std::to_wstring(SHOW_PREVIEW) + SEPARATOR + std::to_wstring(ShowPreview())),
@@ -640,6 +667,9 @@ void UserSettings::Deserialize(std::vector<std::wstring> srData)
                 break;
             case CMENU_HOTKEY:
                 SetClipsMenuHotkey(stous(pair.second));
+                break;
+            case SEARCH_HOTKEY:
+                SetSearchHotkey(stous(pair.second));
                 break;
             case SAVE_TO_DISK:
                 {

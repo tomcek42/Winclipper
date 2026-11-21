@@ -63,6 +63,9 @@
     <ClInclude Include="Clip.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ClipPicker.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="ISerializable.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -123,6 +126,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Clip.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ClipPicker.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ISerializable.cpp">

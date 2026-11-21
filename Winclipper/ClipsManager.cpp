@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "wincodec.h"
 #include "ClipsManager.h"
+#include "ClipPicker.h"
 
 void ClipsManager::SaveClipsAsync()
 {
@@ -688,7 +689,8 @@ std::shared_ptr<Clip> ClipsManager::GetClipAt(unsigned int index)
 	}
 }
 
-void ClipsManager::ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit)
+void ClipsManager::ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit, bool searchOnly,
+	const std::function<void(int, const RECT *)> & preview)
 {
 	// TrackPopupMenu runs a nested message loop, so a hotkey or tray click
 	// while the menu is open would open a second menu on top of it.
@@ -761,112 +763,17 @@ void ClipsManager::ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit)
 		// queue a busy or hung foreground app stalls the menu's mouse input.
 		AttachThreadInput(GetWindowThreadProcessId(curWin, nullptr), GetWindowThreadProcessId(hWnd, nullptr), false);
 
-        HMENU menu = CreatePopupMenu();
-
-        const unsigned int curSize = GetSize();
-
-        if (curSize > 0)
-        {
-            unsigned int j = curSize > UserSettings::MaxDisplayClips() ? UserSettings::MaxDisplayClips() : curSize;
-			const unsigned int pinnedCount = clips.PinnedCount();
-
-            for (unsigned int i = 0; i < j; i++)
-            {
-				// Separates the pinned clips from the others. Separators have
-				// ID 0, so the right-click handler ignores them.
-				if (i == pinnedCount && i > 0)
-				{
-					AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-				}
-                std::shared_ptr<Clip> clip = GetClipAt(i);
-                if (clip != nullptr)
-                {
-					if (clip->ContainsFormat(CF_UNICODETEXT))
-					{
-						std::wstring menuText;
-						menuText = clip->GetUnicodeMenuText(UserSettings::MenuDisplayChars());
-
-						AppendMenuW(menu, MF_STRING, UINT_PTR{ i } +1, menuText.c_str());
-						if (clip->ContainsFormat(CF_DIB))
-						{
-							SetMenuItemBitmaps(menu, UINT{ i } +1, MF_BYCOMMAND, clip->GetThumbnail(), clip->GetThumbnail());
-						}
-					}
-					else if (clip->ContainsFormat(CF_DIB))
-					{
-						AppendMenuW(menu, MF_STRING, UINT_PTR{ i } + 1, (L"[IMAGE] " + std::to_wstring(clip->DibHeight()) + L" x " + std::to_wstring(clip->DibWidth())).c_str());
-						SetMenuItemBitmaps(menu, UINT{ i } + 1, MF_BYCOMMAND, clip->GetThumbnail(), clip->GetThumbnail());
-					}
-                }
-            }
-            if (curSize > UserSettings::MaxDisplayClips())
-            {
-                HMENU sMenu = CreatePopupMenu();
-                
-                for (/*j is equal to displayCount */; j < curSize; j++)
-                {
-					std::shared_ptr<Clip> clip = GetClipAt(j);
-                    if (clip != nullptr)
-                    {
-						if (clip->ContainsFormat(CF_UNICODETEXT))
-						{
-							std::wstring menuText;
-							menuText = clip->GetUnicodeMenuText(UserSettings::MenuDisplayChars());
-
-							AppendMenuW(sMenu, MF_STRING, UINT_PTR{ j } + 1, menuText.c_str());
-							if (clip->ContainsFormat(CF_DIB))
-							{
-								SetMenuItemBitmaps(sMenu, UINT{ j } + 1, MF_BYCOMMAND, clip->GetThumbnail(), clip->GetThumbnail());
-							}
-						}
-						else if (clip->ContainsFormat(CF_DIB))
-						{
-							AppendMenuW(sMenu, MF_STRING, UINT_PTR{ j } + 1, (L"[IMAGE] " + std::to_wstring(clip->DibHeight()) + L" x " + std::to_wstring(clip->DibWidth())).c_str());
-							SetMenuItemBitmaps(sMenu, UINT{ j } + 1, MF_BYCOMMAND, clip->GetThumbnail(), clip->GetThumbnail());
-						}
-					}
-                }
-                AppendMenuW(menu, MF_STRING | MF_POPUP, reinterpret_cast<UINT_PTR>(sMenu), L"More...");
-            }
-        }
-        else
-        {
-            AppendMenuW(menu, MF_STRING | MF_DISABLED, 0, L"Nothing on the clipboard");
-        }
-
-        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(menu, MF_STRING, CLEARCLIPS_SELECT, L"&Clear Clips");
-        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-		const std::wstring updateVersion = Updater::AvailableVersion();
-		if (!updateVersion.empty())
-		{
-			AppendMenuW(menu, MF_STRING, UPDATE_SELECT, (L"&Install update " + updateVersion + L"...").c_str());
-		}
-        AppendMenuW(menu, MF_STRING, SETTINGS_SELECT, L"&Settings");
-		// Debug info
-		//wchar_t str[128];
-		//wsprintf(str, L"Window handle is 0x%08x", curWin);
-		//AppendMenuW(menu, MF_STRING, SETTINGS_SELECT, str);
-        if (showExit)
-        {
-			AppendMenuW(menu, MF_STRING, EXIT_SELECT, L"&Exit");
-        }
-        
-        int menuSelection;
-        menuSelection = TrackPopupMenu(
-            menu,
-            TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RETURNCMD,
-            cPos->x - 5,
-            cPos->y - 5,
-            0,
-            hWnd,
-            NULL
-        );
-		// apparently this line is needed to ensure
-		// consistent popup menu behavior.
+		// The menu is an own window (see ClipPicker.h): a Win32 menu cannot
+		// scroll with the wheel and keeps no other window usable while open.
+		ClipMenuOptions options;
+		options.owner = hWnd;
+		options.pos = *cPos;
+		options.showExit = showExit;
+		options.searchOnly = searchOnly;
+		options.updateVersion = Updater::AvailableVersion();
+		options.preview = preview;
+		int menuSelection = ShowClipMenu(*this, options);
 		PostMessageW(hWnd, WM_USER, 0, 0);
-		// Frees the menu and the "More..." submenu; they leaked on every open.
-		DestroyMenu(menu);
 
 		// Re-attach so focus can be handed back to the previous window.
 		AttachThreadInput(GetWindowThreadProcessId(curWin, nullptr), GetWindowThreadProcessId(hWnd, nullptr), true);

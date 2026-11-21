@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include <functional>
 #include "resource.h"
 #include "UserSettings.h"
 #include "File.h"
@@ -15,6 +16,8 @@
 #define CLEARCLIPS_SELECT   2001    // clear all clips that are currently saved (doesn't clear the actual clipboard)
 #define EXIT_SELECT         2002    // close the application
 #define UPDATE_SELECT       2003    // install the update the updater found
+#define MORE_SELECT         2004    // open the clip picker with all clips
+#define SEARCH_SELECT       2005    // open the clip picker to search
 #define IDM_INSTALL_UPDATE  32790   // WM_COMMAND for UPDATE_SELECT (not a resource)
 #define IDM_INSTALL_UPDATE_NOW 32791 // Settings "Install update": already confirmed, no dialog
 #define IDM_UPDATE_LATER    32792   // Settings "Later"
@@ -66,6 +69,7 @@ public:
 	void							TogglePinAt(unsigned int index);
 	bool							IsClipPinnedAt(unsigned int index);
 	std::shared_ptr<Clip>			GetClipAt(unsigned int index);
-	void							ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit);
+	void							ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit, bool searchOnly = false,
+									const std::function<void(int, const RECT *)> & preview = nullptr);
 	void							SelectDefaultMenuItem(bool select2ndClip) noexcept;
 };

@@ -159,6 +159,9 @@ LRESULT SettingsWindow::SettingsWndProc(HWND hWnd, UINT message, WPARAM wParam, 
 		case HKY_SHOW_CLIPS_MENU:
 			lResult = pThis->WmCommandHkyShowClipsMenu(hWnd, wParam, lParam);
 			break;
+		case HKY_SEARCH:
+			lResult = pThis->WmCommandHkySearch(hWnd, wParam, lParam);
+			break;
 		case TXT_MAX_IMG_CACHE_MB:
 			lResult = pThis->WmCommandTxtMaxImageCacheMb(hWnd, wParam, lParam);
 			break;
@@ -472,6 +475,25 @@ LRESULT SettingsWindow::WmCommandHkyShowClipsMenu(HWND hWnd, WPARAM wParam, LPAR
 			// intead of on each side of the WORD, so we have to split
 			// these out for consistency with storing in settings.
 			UserSettings::SetClipsMenuHotkey(MAKEWORD(LOBYTE(LOWORD(wHotkey)), HIBYTE(LOWORD(wHotkey))));
+		}
+	}
+	return 0;
+}
+
+LRESULT SettingsWindow::WmCommandHkySearch(HWND hWnd, WPARAM wParam, LPARAM lParam)
+{
+	if (HIWORD(wParam) == EN_CHANGE)
+	{
+		const WORD wHotkey = static_cast<WORD>(SendMessageW(GetDlgItem(hWnd, HKY_SEARCH), HKM_GETHOTKEY, 0, 0));
+		// Same storage layout and reset-to-default as the clips menu shortcut.
+		if (wHotkey == 0)
+		{
+			SendMessageW(GetDlgItem(hWnd, HKY_SEARCH), HKM_SETHOTKEY, SEARCH_HOTKEY_DEF, 0);
+			UserSettings::SetSearchHotkey(SEARCH_HOTKEY_DEF);
+		}
+		else
+		{
+			UserSettings::SetSearchHotkey(MAKEWORD(LOBYTE(wHotkey), HIBYTE(wHotkey)));
 		}
 	}
 	return 0;
@@ -1006,10 +1028,18 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	LabelShowClipsHotkey.ResumeLayout();
 	HWND hHotKey = AddHotkeyCtrl(hWnd, hFontStd, left + 140, top + 10, 150, 20, hInstance, HKY_SHOW_CLIPS_MENU);
 
+	LabelSearchHotkey = Controls::Label(hWnd, LBL_SEARCH_HOTK, hInstance);
+	LabelSearchHotkey.SuspendLayout();
+	LabelSearchHotkey.SetX(left);
+	LabelSearchHotkey.SetY(top + 42);
+	LabelSearchHotkey.SetText(L"Search clips shortcut:");
+	LabelSearchHotkey.ResumeLayout();
+	HWND hSearchHotKey = AddHotkeyCtrl(hWnd, hFontStd, left + 140, top + 40, 150, 20, hInstance, HKY_SEARCH);
+
 	CheckboxRunAtStartup = Controls::Checkbox(hWnd, CHK_RUN_AT_STARTUP, hInstance);
 	CheckboxRunAtStartup.SuspendLayout();
 	CheckboxRunAtStartup.SetX(left);
-	CheckboxRunAtStartup.SetY(top + 44);
+	CheckboxRunAtStartup.SetY(top + 74);
 	CheckboxRunAtStartup.SetText(L"Run Winclipper at startup");
 	CheckboxRunAtStartup.UseBasicTheme = !useLightTheme;
 	CheckboxRunAtStartup.ResumeLayout();
@@ -1017,7 +1047,7 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	CheckboxPasteOnClick = Controls::Checkbox(hWnd, CHK_PASTE_ON_CLICK, hInstance);
 	CheckboxPasteOnClick.SuspendLayout();
 	CheckboxPasteOnClick.SetX(left);
-	CheckboxPasteOnClick.SetY(top + 68);
+	CheckboxPasteOnClick.SetY(top + 98);
 	CheckboxPasteOnClick.SetText(L"Paste immediately on click");
 	CheckboxPasteOnClick.UseBasicTheme = !useLightTheme;
 	CheckboxPasteOnClick.ResumeLayout();
@@ -1025,7 +1055,7 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	CheckboxSelectSecondClip = Controls::Checkbox(hWnd, CHK_SLCT_2ND_CLIP, hInstance);
 	CheckboxSelectSecondClip.SuspendLayout();
 	CheckboxSelectSecondClip.SetX(left);
-	CheckboxSelectSecondClip.SetY(top + 92);
+	CheckboxSelectSecondClip.SetY(top + 122);
 	CheckboxSelectSecondClip.SetText(L"Auto-select second clip");
 	CheckboxSelectSecondClip.UseBasicTheme = !useLightTheme;
 	CheckboxSelectSecondClip.ResumeLayout();
@@ -1033,7 +1063,7 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	CheckboxShowPreview = Controls::Checkbox(hWnd, CHK_SHOW_PREVIEW, hInstance);
 	CheckboxShowPreview.SuspendLayout();
 	CheckboxShowPreview.SetX(left);
-	CheckboxShowPreview.SetY(top + 116);
+	CheckboxShowPreview.SetY(top + 146);
 	CheckboxShowPreview.SetText(L"Show clip preview");
 	CheckboxShowPreview.UseBasicTheme = !useLightTheme;
 	CheckboxShowPreview.ResumeLayout();
@@ -1219,6 +1249,7 @@ bool SettingsWindow::InitSettingsWindow(HINSTANCE hInstance)
 	RefreshExcludedList();
 
 	SendMessageW(hHotKey, HKM_SETHOTKEY, UserSettings::ClipsMenuHotkey(), 0);
+	SendMessageW(hSearchHotKey, HKM_SETHOTKEY, UserSettings::SearchHotkey(), 0);
 
 	ShowPage(PAGE_GENERAL);
 

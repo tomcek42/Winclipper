@@ -58,6 +58,8 @@
 #define BTN_UPDATE_LATER        239
 #define LNK_RELEASE_NOTES       240
 #define LBL_UPDATE_NOTE         241
+#define LBL_SEARCH_HOTK         242
+#define HKY_SEARCH              243
 
 
 class SettingsWindow : public Notify
@@ -101,6 +103,7 @@ private:
 	LRESULT						WmCommandChkSaveImages(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandTxtMaxImageCacheMb(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCommandHkyShowClipsMenu(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	LRESULT						WmCommandHkySearch(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmLbuttondown(HWND hWnd);
 	LRESULT						WmCtlColorStatic(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	LRESULT						WmCtlColorEdit(HWND hWnd, WPARAM wParam, LPARAM lParam);
@@ -144,6 +147,7 @@ private:
 	Controls::Label				LabelMenuDisplayChars;
 	Controls::Spinner			SpinnerMenuDisplayChars;
 	Controls::Label				LabelShowClipsHotkey;
+	Controls::Label				LabelSearchHotkey;
 	Controls::Checkbox			CheckboxSaveToDisk;
 	Controls::Checkbox			CheckboxRunAtStartup;
 	Controls::Checkbox			CheckboxSelectSecondClip;
