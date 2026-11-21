@@ -25,10 +25,10 @@
 
                                     // ERROR is returned in any other situation
 
-typedef struct {
+struct HANDLEDATA {
 	DWORD pId = 0;
 	HWND hWnd = nullptr;
-} HANDLEDATA;
+};
 
 class ClipsManager
 {

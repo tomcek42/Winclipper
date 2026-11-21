@@ -42,12 +42,12 @@ bool Controls::Checkbox::Create()
 
 bool Controls::Checkbox::Value()
 {
-	return IsDlgButtonChecked(parentHandle, id) == BST_CHECKED;
+	return IsDlgButtonChecked(parentHandle, static_cast<int>(id)) == BST_CHECKED;
 }
 
 void Controls::Checkbox::SetValue(bool value)
 {
-	CheckDlgButton(parentHandle, id, value ? BST_CHECKED : BST_UNCHECKED);
+	CheckDlgButton(parentHandle, static_cast<int>(id), value ? BST_CHECKED : BST_UNCHECKED);
 }
 
 Controls::Checkbox::Checkbox()

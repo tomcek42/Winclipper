@@ -3,7 +3,7 @@
 
 namespace Controls
 {
-	static class Font
+	class Font
 	{
 	private:
 		static HFONT GetSystemFont();
