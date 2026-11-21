@@ -688,47 +688,6 @@ std::shared_ptr<Clip> ClipsManager::GetClipAt(unsigned int index)
 	}
 }
 
-static bool IsOwnMenuWindow(HWND window)
-{
-	wchar_t cls[16] = {};
-	DWORD pid = 0;
-	return window != nullptr
-		&& GetWindowThreadProcessId(window, &pid) != 0 && pid == GetCurrentProcessId()
-		&& GetClassNameW(window, cls, 16) != 0 && wcscmp(cls, L"#32768") == 0;
-}
-
-// Popup menus with scroll arrows ignore the mouse wheel. While the menu's
-// modal loop runs, translate each wheel notch into an Up/Down key press for
-// the menu window under the cursor, which scrolls the list.
-// WH_MOUSE_LL: the wheel goes to the thread with keyboard focus, which is
-// usually another program, so thread hooks never see it. Only wheel events
-// over a menu window of this process are handled; everything else passes.
-static LRESULT CALLBACK MenuWheelFilter(int code, WPARAM wParam, LPARAM lParam)
-{
-	if (code == HC_ACTION && wParam == WM_MOUSEWHEEL && lParam != 0)
-	{
-		const MSLLHOOKSTRUCT * info = reinterpret_cast<const MSLLHOOKSTRUCT *>(lParam);
-		HWND target = WindowFromPoint(info->pt);
-		if (IsOwnMenuWindow(target))
-		{
-			const int delta = static_cast<short>(HIWORD(info->mouseData));
-			// One line per notch; the system scroll setting (default 3) was too fast.
-			const WPARAM key = delta > 0 ? VK_UP : VK_DOWN;
-			int steps = (delta > 0 ? delta : -delta) / WHEEL_DELTA;
-			if (steps < 1)
-			{
-				steps = 1;
-			}
-			for (int i = 0; i < steps && i < 10; i++)
-			{
-				PostMessageW(target, WM_KEYDOWN, key, 1);
-			}
-			return 1;
-		}
-	}
-	return CallNextHookEx(nullptr, code, wParam, lParam);
-}
-
 void ClipsManager::ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit)
 {
 	// TrackPopupMenu runs a nested message loop, so a hotkey or tray click
@@ -893,7 +852,6 @@ void ClipsManager::ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit)
 			AppendMenuW(menu, MF_STRING, EXIT_SELECT, L"&Exit");
         }
         
-        HHOOK wheelHook = SetWindowsHookExW(WH_MOUSE_LL, MenuWheelFilter, GetModuleHandleW(nullptr), 0);
         int menuSelection;
         menuSelection = TrackPopupMenu(
             menu,
@@ -904,10 +862,6 @@ void ClipsManager::ShowClipsMenu(HWND hWnd, const LPPOINT cPos, bool showExit)
             hWnd,
             NULL
         );
-		if (wheelHook != nullptr)
-		{
-			UnhookWindowsHookEx(wheelHook);
-		}
 		// apparently this line is needed to ensure
 		// consistent popup menu behavior.
 		PostMessageW(hWnd, WM_USER, 0, 0);
