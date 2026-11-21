@@ -3,6 +3,23 @@
 Changes in this fork compared to `Carson-Shook/Winclipper` 1.4.2. Details on each finding:
 `docs/SECURITY-FINDINGS.md`.
 
+## 1.7.0 (2026-11-22)
+
+### Changes
+- The clips menu and the "More..." list are now Winclipper's own windows in the look of the Windows menu. Both stay
+  open together: "More..." opens the full list beside the menu on hover, click or the right arrow key.
+- The "More..." list scrolls one line per mouse wheel notch, has a slim position bar that can be dragged, and is as
+  tall as the screen allows. The highlight only moves when the cursor reaches another clip.
+- Search: the "More..." list has a search box that filters clips as you type (case-insensitive, in memory only;
+  images match their "[IMAGE] height x width" label). A separate shortcut opens it directly, default `Ctrl+Shift+F`,
+  configurable in Settings > General.
+- Right-click (Pin/Unpin/Delete) and the clip preview also work in the "More..." list; the menu stays open after a
+  pin or delete.
+- The selected clip is marked with a thin frame instead of a filled highlight.
+- No preview pops up for the preselected clip when the menu opens.
+- The preview has a slimmer frame and rounded corners and appears left of the menu unless there is no room.
+- The tray icon shows its "Winclipper" tooltip instead of an empty bubble.
+
 ## 1.6.6 (2026-11-11)
 
 ### Changes

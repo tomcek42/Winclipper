@@ -59,6 +59,11 @@ Check installed toolsets:
   form a block at the front of `ClipsCollection` (restored with `NormalizePinOrder` after loading, never taken from
   file order), are never trimmed, and survive "Clear unpinned clips".
 - The TaskDialog verification checkbox is misaligned at >100 % scaling and cannot be fixed; use buttons instead.
+- The clips menu is not a Win32 menu: `ClipPicker.cpp` draws the menu and the "More..." list as own popup windows
+  with the `MENU` theme and runs its own modal loop. Win32 menus cannot scroll with the wheel, re-highlight on every
+  mouse move (hooks either miss it or freeze the cursor) and close when another window is clicked; do not go back.
+- Clip text loaded from `clips.dat` ends with an embedded `L'\0'` (the serializer writes `length() + 1`). Theme text
+  APIs count it and add an ellipsis; `RowText` cuts at the first NUL. Keep that when measuring or drawing clip text.
 - A running Winclipper locks the EXE (LNK1104). Stop it before building (`taskkill /IM Winclipper.exe /F`).
 
 ## Security conventions for changes

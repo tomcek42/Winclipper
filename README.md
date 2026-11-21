@@ -31,6 +31,12 @@ build an installer on its own, build the EXE first and then run `dotnet build -c
 
 ## Changelog
 
+**1.7.0** - 2026-11-22 (this fork)
+
+- Own clips menu window: the "More..." list opens beside it, scrolls with the mouse wheel and has a draggable position bar.
+- Search clips in the "More..." list or directly with `Ctrl+Shift+F` (configurable).
+- Framed selection, slimmer preview frame shown left of the menu, no preview on open, tray tooltip fix.
+
 **1.6.6** - 2026-11-11 (this fork)
 
 - Pin clips: right-click a clip and choose "Pin" or "Unpin". Pinned clips stay at the top and are never removed automatically.
