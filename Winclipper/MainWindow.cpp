@@ -490,7 +490,7 @@ void MainWindow::ShowBalloon(const wchar_t * title, const wchar_t * text)
 	NOTIFYICONDATA nid = { sizeof(nid) };
 	nid.hWnd = windowHandle;
 	nid.uID = UID_NOTIFYICON;
-	nid.uFlags = NIF_INFO;
+	nid.uFlags = NIF_INFO | NIF_SHOWTIP;
 	nid.dwInfoFlags = NIIF_INFO;
 	wcscpy_s(nid.szInfoTitle, title);
 	wcscpy_s(nid.szInfo, text);
@@ -829,7 +829,7 @@ bool MainWindow::AddNotificationIcon(HWND hWnd, HINSTANCE hInstance)
 {
 	NOTIFYICONDATA nid = { sizeof(nid) };
 	nid.hWnd = hWnd;
-	nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+	nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP | NIF_SHOWTIP;
 	nid.uCallbackMessage = WMAPP_NOTIFYCALLBACK;
 	nid.uID = UID_NOTIFYICON;
 	wcscpy_s(nid.szTip, L"Winclipper");
@@ -861,7 +861,7 @@ void MainWindow::SetNotificationIcon(HICON icon, const wchar_t * tip)
 	NOTIFYICONDATA nid = { sizeof(nid) };
 	nid.hWnd = windowHandle;
 	nid.uID = UID_NOTIFYICON;
-	nid.uFlags = NIF_ICON;
+	nid.uFlags = NIF_ICON | NIF_SHOWTIP;
 	nid.hIcon = icon;
 	if (tip != nullptr)
 	{
