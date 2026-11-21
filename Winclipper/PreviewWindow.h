@@ -16,7 +16,7 @@
 class PreviewWindow
 {
 private:
-	const float					windowBorderWidth = 6.5f;
+	const float					windowBorderWidth = 4.0f;	// slim frame
 	const float					windowMaxWidth = 500.0f;
 	const float					windowMaxHeight = 500.0f;
 	const float					textMarginWidth = 5.5f;

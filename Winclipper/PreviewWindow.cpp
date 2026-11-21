@@ -1,4 +1,6 @@
 #include "stdafx.h"
+#include <dwmapi.h>
+#pragma comment(lib, "Dwmapi.lib")
 #include <comdef.h>
 #include "PreviewWindow.h"
 
@@ -702,6 +704,10 @@ bool PreviewWindow::InitPreviewWindow(HINSTANCE hInstance, HWND hWndParent)
 		return false;
 	}
 
+	// Rounded corners like the clips menu; ignored before Windows 11.
+	const DWORD corners = 3; // DWMWCP_ROUNDSMALL
+	DwmSetWindowAttribute(hWnd, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, &corners, sizeof(corners));
+
 	ShowWindow(hWnd, SW_HIDE);
 	UpdateWindow(hWnd);
 
@@ -920,13 +926,11 @@ void PreviewWindow::MoveRelativeToRect(const LPRECT rect, unsigned int index)
 	// them go off screen.
 	// 2018-09-09: width is now based on the maximum window size.
 	// I was tired of it flipping back and forth constantly.
-	if (xLoc + ScaleX(windowMaxWidth) + ScaleX(8) > (lpmi.rcWork).right)
+	// Left of the menu row by default; right only if there is no room on the left.
+	xLoc = rect->left - (totalWindowWidth + ScaleX(5));
+	if (xLoc < (lpmi.rcWork).left)
 	{
-		const int xLocTemp = rect->left - (totalWindowWidth + ScaleX(8));
-		if (xLocTemp > (lpmi.rcWork).left)
-		{
-			xLoc = xLocTemp;
-		}
+		xLoc = rect->right + ScaleX(5);
 	}
 	if (yLoc + totalWindowHeight + ScaleX(24) > (lpmi.rcWork).bottom)
 	{
